@@ -8,7 +8,13 @@ export const metadata: Metadata = {
   description: 'Engineering notes across my work — Web3, security, and commerce.',
 };
 
-/** Blog index `/blog`. Published posts only (drafts excluded — #3), newest first. */
+/** Blog index `/blog`. Published posts only (drafts excluded — #3), newest first.
+ *
+ *  Lives in the `(index)` route group so its `loading.tsx` Suspense/streaming
+ *  boundary scopes to THIS page only. A `loading.tsx` at the shared `blog/`
+ *  segment would also wrap `blog/[slug]`, streaming a 200 shell before that
+ *  route's `notFound()` resolves — a soft-404. Keeping the boundary here lets the
+ *  dynamic post page emit a real 404 status (#3, #6). */
 export default async function BlogIndexPage() {
   const posts = ((await listPublishedPosts({})) as PostListItem[]) ?? [];
 

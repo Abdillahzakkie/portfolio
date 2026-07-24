@@ -1,6 +1,10 @@
 import { Skeleton } from '@/components/public/Feedback';
 
-/** Blog index loading — heading + 6 PostCard skeletons (docs/03 §3). */
+/** Blog index loading — heading + 6 PostCard skeletons (docs/03 §3).
+ *
+ *  Scoped to the `(index)` route group so this streaming boundary covers ONLY
+ *  `/blog` and never `blog/[slug]` — the post page must stay unstreamed so its
+ *  `notFound()` can emit a real 404 status (see this group's page.tsx). */
 export default function BlogLoading() {
   return (
     <div style={{ maxWidth: 'var(--content-max)', margin: '0 auto', padding: '24px 16px 40px' }}>

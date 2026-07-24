@@ -44,11 +44,26 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function BlogPostPage({ params }: PageProps) {
   const { slug } = await params;
   // Drafts / unknown slugs resolve to null for anonymous readers → 404 (#3).
+  //
+  // This route deliberately has NO `loading.tsx` (neither here nor on the parent
+  // `blog/` segment — the index skeleton lives in the `(index)` route group). A
+  // `loading.tsx` here would open a Suspense/streaming boundary that flushes a
+  // 200 HTML shell BEFORE this async component resolves and calls notFound(),
+  // producing a soft-404 (HTTP 200 with 404 content). Without the boundary Next
+  // resolves the RSC tree — including notFound() — before committing the status,
+  // so the response is a real 404 (#3 correctness + #6 SEO). Verified in prod.
   const view = (await getPublishedPost(slug)) as PublishedPostView | null;
   if (!view) notFound();
 
   const { post, project, prevSlug, nextSlug } = view;
   const domain = domainOf(view);
+
+  // getPublishedPost derives prev/next from a publishedAt-DESC (newest-first)
+  // timeline: `prevSlug` is the NEWER neighbour, `nextSlug` the OLDER one. In the
+  // usual reverse-chronological reading, "← Previous" means the earlier/older post
+  // and "Next →" the later/newer post — so map the slugs to match that direction.
+  const olderSlug = nextSlug; // earlier in time → "← Previous post"
+  const newerSlug = prevSlug; // later in time   → "Next post →"
 
   return (
     <article
@@ -142,7 +157,7 @@ export default async function BlogPostPage({ params }: PageProps) {
         </div>
       )}
 
-      {(prevSlug || nextSlug) && (
+      {(olderSlug || newerSlug) && (
         <nav
           aria-label="Post navigation"
           style={{ borderTop: '1px solid var(--border)', paddingTop: 28, marginTop: 24 }}
@@ -156,15 +171,15 @@ export default async function BlogPostPage({ params }: PageProps) {
               flexWrap: 'wrap',
             }}
           >
-            {prevSlug ? (
-              <Link href={`/blog/${prevSlug}`} style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
+            {olderSlug ? (
+              <Link href={`/blog/${olderSlug}`} style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
                 ← Previous post
               </Link>
             ) : (
               <span />
             )}
-            {nextSlug ? (
-              <Link href={`/blog/${nextSlug}`} style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
+            {newerSlug ? (
+              <Link href={`/blog/${newerSlug}`} style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
                 Next post →
               </Link>
             ) : (

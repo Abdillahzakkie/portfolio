@@ -31,6 +31,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ProjectPage({ params }: PageProps) {
   const { slug } = await params;
+  // Missing slugs → 404. This route intentionally has NO `loading.tsx`: a
+  // streaming boundary would flush a 200 shell before notFound() resolves,
+  // yielding a soft-404. Rendering unstreamed lets Next set a real 404 status
+  // (#3 correctness + #6 SEO). Verified against a production server.
   const view = (await getProjectView(slug)) as ProjectView | null;
   if (!view) notFound();
 
