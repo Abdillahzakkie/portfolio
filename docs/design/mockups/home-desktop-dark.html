@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0B0D12">
+<title>Constellation of Work — Home (desktop, dark)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FBFAF7; --bg-elevated:#FFFFFF; --surface:#FFFFFF; --surface-2:#F2F0EA;
+  --text:#1A1A1E; --text-muted:#55555F; --text-faint:#7C7C86;
+  --border:#E3E0D8; --border-strong:#CFCBC0; --ring:#4F46E5;
+  --cluster-web3-core:#6366F1; --cluster-web3-text:#4F46E5;
+  --cluster-security-core:#F43F5E; --cluster-security-text:#BE123C;
+  --cluster-commerce-core:#10B981; --cluster-commerce-text:#047857;
+  --cluster-tools-core:#F59E0B; --cluster-tools-text:#B45309;
+  --success:#047857; --warning:#B45309; --danger:#BE123C; --info:#4F46E5;
+  --font-display:'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-body:'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --radius-sm:6px; --radius-md:10px; --radius-lg:16px; --radius-full:9999px;
+  --elev-1:0 1px 2px rgba(20,20,30,.06);
+  --elev-2:0 4px 12px rgba(20,20,30,.08);
+  --elev-3:0 12px 32px rgba(20,20,30,.12);
+  --content-max:1200px;
+  color-scheme: light;
+}
+.dark{
+  --bg:#0B0D12; --bg-elevated:#14171F; --surface:#171B24; --surface-2:#1E232E;
+  --text:#ECEDF1; --text-muted:#A0A4B0; --text-faint:#6B7280;
+  --border:#262B36; --border-strong:#333A48; --ring:#A5B4FC;
+  --cluster-web3-text:#A5B4FC; --cluster-security-text:#FDA4AF;
+  --cluster-commerce-text:#6EE7B7; --cluster-tools-text:#FCD34D;
+  --success:#6EE7B7; --warning:#FCD34D; --danger:#FDA4AF; --info:#A5B4FC;
+  --elev-1:0 0 0 1px var(--border);
+  --elev-2:0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,.5);
+  --elev-3:0 0 0 1px var(--border-strong), 0 16px 48px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg); color:var(--text); font-family:var(--font-body);
+  font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+a{color:inherit;text-decoration:none;}
+.header{
+  position:sticky; top:0; z-index:20; background:color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter:saturate(1.4) blur(10px); border-bottom:1px solid var(--border);
+}
+.header-inner{
+  max-width:var(--content-max); margin:0 auto; padding:14px 32px;
+  display:flex; align-items:center; justify-content:space-between; gap:24px;
+}
+.wordmark{font-family:var(--font-display); font-weight:700; font-size:20px; letter-spacing:-.02em; display:flex; align-items:center; gap:8px;}
+.wordmark .glyph{color:var(--cluster-web3-text);}
+.nav{display:flex; align-items:center; gap:4px;}
+.nav a{padding:8px 14px; border-radius:var(--radius-md); font-size:15px; font-weight:500; color:var(--text-muted);}
+.nav a.active{color:var(--text); background:var(--surface-2);}
+.nav a:hover{color:var(--text);}
+.icon-btn{
+  width:40px; height:40px; display:grid; place-items:center; border-radius:var(--radius-md);
+  border:1px solid var(--border-strong); background:var(--surface); color:var(--text); cursor:pointer;
+}
+.icon-btn:hover{background:var(--surface-2);}
+.stage{max-width:var(--content-max); margin:0 auto; padding:36px 32px 24px;
+  display:grid; grid-template-columns:280px 1fr; gap:36px; align-items:start;}
+.rail{position:sticky; top:96px;}
+.eyebrow{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); font-weight:600;}
+.rail h1{font-family:var(--font-display); font-weight:700; letter-spacing:-.02em; font-size:44px; line-height:1.06; margin:10px 0 14px;}
+.rail .role{font-size:18px; color:var(--text-muted); line-height:1.5; margin:0 0 8px;}
+.rail .role b{color:var(--text); font-weight:600;}
+.rail p.lede{font-size:15px; color:var(--text-muted); margin:0 0 22px; max-width:30ch;}
+.btn{display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 16px; border-radius:var(--radius-md);
+  font-family:var(--font-body); font-weight:600; font-size:14px; cursor:pointer; border:1px solid transparent;}
+.btn.secondary{background:var(--surface); border-color:var(--border-strong); color:var(--text);}
+.btn.secondary:hover{background:var(--surface-2);}
+.btn.primary{background:var(--info); color:#0B0D12; border-color:transparent;}
+.legend{margin-top:26px; display:flex; flex-direction:column; gap:10px;}
+.legend .row{display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text-muted);}
+.legend .dom{display:inline-flex; align-items:center; gap:7px; font-weight:600;}
+.legend .swatch{width:11px; height:11px; border-radius:50%;}
+.legend .glowdot{width:11px;height:11px;border-radius:50%;background:var(--cluster-web3-core);box-shadow:0 0 8px 2px color-mix(in srgb,var(--cluster-web3-core) 60%, transparent);}
+.canvas-wrap{position:relative;}
+.canvas{
+  position:relative; width:100%; aspect-ratio:1000/700; border:1px solid var(--border);
+  border-radius:var(--radius-lg); background:var(--bg-elevated); overflow:hidden; box-shadow:var(--elev-1);
+}
+.canvas svg{position:absolute; inset:0; width:100%; height:100%; display:block;}
+.node text{font-family:var(--font-body); font-weight:500; font-size:15px; fill:var(--text);
+  paint-order:stroke; stroke:var(--bg-elevated); stroke-width:3px; stroke-linejoin:round;}
+.node.dim{opacity:.5;}
+.clabel .main{font-family:var(--font-display); font-weight:700; font-size:22px;}
+.clabel .sub{font-family:var(--font-body); font-weight:500; font-size:12.5px; fill:var(--text-faint);}
+.zoom{position:absolute; right:16px; bottom:16px; display:flex; gap:6px; background:var(--surface);
+  border:1px solid var(--border-strong); border-radius:var(--radius-md); padding:5px; box-shadow:var(--elev-2);}
+.zoom button{width:34px; height:34px; border:none; background:transparent; color:var(--text); border-radius:8px;
+  font-size:17px; cursor:pointer; display:grid; place-items:center; font-family:var(--font-body); font-weight:600;}
+.zoom button:hover{background:var(--surface-2);}
+.zoom .fit{width:auto; padding:0 12px; font-size:13px;}
+.popover{
+  position:absolute; left:27%; top:30%; transform:translate(26px,-46px); width:266px; z-index:5;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+  box-shadow:var(--elev-3); padding:16px 16px 15px;
+}
+.popover .pv-glyph-dom{display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600;
+  letter-spacing:.08em; text-transform:uppercase; color:var(--cluster-web3-text); margin-bottom:5px;}
+.popover .pv-name{font-family:var(--font-display); font-weight:700; font-size:18px; letter-spacing:-.01em; margin:0 0 5px;}
+.popover .pv-tag{font-size:13px; color:var(--text-muted); line-height:1.45; margin:0 0 12px;}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}
+.chip{font-size:11px; font-weight:600; padding:3px 9px; border-radius:var(--radius-full);
+  background:color-mix(in srgb, var(--cluster-web3-core) 18%, transparent); color:var(--cluster-web3-text);}
+.statuspill{display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600;
+  padding:4px 10px; border-radius:var(--radius-full); background:color-mix(in srgb, var(--success) 16%, transparent);
+  color:var(--success);}
+.statuspill .sdot{width:7px; height:7px; border-radius:50%; background:var(--success);}
+.popover::after{content:""; position:absolute; left:-7px; top:52px; width:12px; height:12px; background:var(--surface);
+  border-left:1px solid var(--border); border-bottom:1px solid var(--border); transform:rotate(45deg);}
+.footer{border-top:1px solid var(--border); margin-top:16px;}
+.footer-inner{max-width:var(--content-max); margin:0 auto; padding:22px 32px; display:flex; gap:20px;
+  flex-wrap:wrap; align-items:center; justify-content:space-between; font-size:13px; color:var(--text-muted);}
+.footer-inner .links{display:flex; gap:18px;}
+.footer-inner a:hover{color:var(--text);}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="header-inner">
+    <a class="wordmark" href="#"><span class="glyph">◆</span> AZ</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#" class="active">Work</a>
+      <a href="#">Blog</a>
+      <a href="#">About</a>
+    </nav>
+    <button class="icon-btn" aria-label="Switch to light theme" aria-pressed="true" title="Theme">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="stage">
+  <aside class="rail" aria-label="Introduction">
+    <p class="eyebrow">The constellation of work</p>
+    <h1>Abdullah<br>Zakariyya</h1>
+    <p class="role">Engineer — <b>Web3</b> · <b>Security</b> · <b>Commerce</b></p>
+    <p class="lede">A body of work as a star map. Each star is a project; four constellations, one per discipline.</p>
+    <button class="btn secondary" aria-label="Switch to a list of all projects">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      View as list
+    </button>
+    <div class="legend" aria-hidden="true">
+      <div class="row"><span class="dom" style="color:var(--cluster-web3-text)"><span class="swatch" style="background:var(--cluster-web3-core)"></span>◆ Web3</span></div>
+      <div class="row"><span class="dom" style="color:var(--cluster-security-text)"><span class="swatch" style="background:var(--cluster-security-core)"></span>▲ Security</span></div>
+      <div class="row"><span class="dom" style="color:var(--cluster-commerce-text)"><span class="swatch" style="background:var(--cluster-commerce-core)"></span>● Commerce</span></div>
+      <div class="row"><span class="dom" style="color:var(--cluster-tools-text)"><span class="swatch" style="background:var(--cluster-tools-core)"></span>✦ Tools / Labs</span></div>
+      <div class="row" style="margin-top:6px"><span class="glowdot"></span> Glow = has a published write-up</div>
+    </div>
+  </aside>
+
+  <div class="canvas-wrap">
+    <section class="canvas" aria-label="Projects, grouped by domain" aria-roledescription="Interactive project constellation">
+      <svg id="chart" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Constellation of 18 projects in four domain clusters">
+        <defs>
+          <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+            <circle cx="1.4" cy="1.4" r="1.1" fill="var(--border)" opacity="0.55"/>
+          </pattern>
+          <radialGradient id="vig" cx="50%" cy="46%" r="72%">
+            <stop offset="55%" stop-color="var(--bg)" stop-opacity="0"/>
+            <stop offset="100%" stop-color="var(--bg)" stop-opacity="0.9"/>
+          </radialGradient>
+          <filter id="soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="20"/></filter>
+          <filter id="glow" x="-120%" y="-120%" width="340%" height="340%"><feGaussianBlur stdDeviation="7"/></filter>
+        </defs>
+        <rect x="0" y="0" width="1000" height="700" fill="url(#dots)"/>
+        <g id="g-halos"></g>
+        <g id="g-edges"></g>
+        <g id="g-labels"></g>
+        <g id="g-nodes"></g>
+        <rect x="0" y="0" width="1000" height="700" fill="url(#vig)" pointer-events="none"/>
+      </svg>
+
+      <div class="popover" role="tooltip" aria-hidden="false">
+        <div class="pv-glyph-dom">◆ Web3</div>
+        <p class="pv-name">Settleo</p>
+        <p class="pv-tag">Non-custodial P2P / OTC crypto-settlement platform.</p>
+        <div class="chips"><span class="chip">Solidity</span><span class="chip">Go</span><span class="chip">gRPC</span></div>
+        <span class="statuspill"><span class="sdot"></span> Published</span>
+      </div>
+
+      <div class="zoom" role="group" aria-label="Zoom controls">
+        <button aria-label="Zoom in">+</button>
+        <button aria-label="Zoom out">−</button>
+        <button class="fit" aria-label="Fit constellation to screen">Fit</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>© 2026 Abdullah Zakariyya</span>
+    <div class="links">
+      <a href="#">GitHub</a><a href="#">Email</a><a href="#">RSS</a><a href="#">Built with Next.js</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var ANCHORS={web3:[270,210],security:[730,210],commerce:[270,490],tools:[730,490]};
+  var RADIUS={3:26,2:19,1:13};
+  var GLYPH={web3:'◆',security:'▲',commerce:'●',tools:'✦'};
+  var PUB={settleo:1,'nftmixer-go':1,sentova:1,managerenta:1,aisolver:1};
+  var FOCUS='settleo';
+  var NODES=[
+    {slug:'settleo',name:'Settleo',domain:'web3',prom:3},
+    {slug:'nftmixer-go',name:'NFTMixer (Go)',domain:'web3',prom:3},
+    {slug:'gkoi-platform',name:'GKOI Platform',domain:'web3',prom:2},
+    {slug:'gkoi-contracts',name:'GKOI Contracts',domain:'web3',prom:2},
+    {slug:'settleo-escrow',name:'Settleo Escrow',domain:'web3',prom:2},
+    {slug:'nftmixer-net',name:'NFTMixer (.NET)',domain:'web3',prom:1},
+    {slug:'gkoi-apps',name:'GKOI Apps',domain:'web3',prom:1},
+    {slug:'sentova',name:'Sentova',domain:'security',prom:3},
+    {slug:'sentova-mtd',name:'Sentova MTD',domain:'security',prom:2},
+    {slug:'managerenta',name:'Managerenta',domain:'commerce',prom:2},
+    {slug:'chekka',name:'Chekka',domain:'commerce',prom:2},
+    {slug:'golden-bite',name:'Golden Bite',domain:'commerce',prom:2},
+    {slug:'prechop',name:'Prechop',domain:'commerce',prom:1},
+    {slug:'adverta',name:'Adverta',domain:'commerce',prom:1},
+    {slug:'mogadget',name:'Mogadget',domain:'commerce',prom:1},
+    {slug:'aisolver',name:'Aisolver',domain:'tools',prom:2},
+    {slug:'fivestick',name:'Fivestick',domain:'tools',prom:1},
+    {slug:'labs',name:'Labs',domain:'tools',prom:1}
+  ];
+  var EDGES=[
+    {a:'nftmixer-net',b:'nftmixer-go',kind:'kinship'},
+    {a:'managerenta',b:'golden-bite',kind:'kinship'},
+    {a:'managerenta',b:'chekka',kind:'kinship'},
+    {a:'managerenta',b:'mogadget',kind:'kinship'},
+    {a:'gkoi-platform',b:'gkoi-apps',kind:'kinship'},
+    {a:'gkoi-platform',b:'gkoi-contracts',kind:'kinship'},
+    {a:'settleo',b:'settleo-escrow',kind:'kinship'},
+    {a:'sentova',b:'sentova-mtd',kind:'kinship'},
+    {a:'settleo',b:'gkoi-contracts',kind:'bridge'},
+    {a:'sentova',b:'settleo',kind:'bridge'}
+  ];
+  var pos={};
+  Object.keys(ANCHORS).forEach(function(dom){
+    var list=NODES.filter(function(n){return n.domain===dom;}).sort(function(a,b){return b.prom-a.prom;});
+    list.forEach(function(n,i){
+      var ang=i*137.5*Math.PI/180, r=34*Math.sqrt(i);
+      pos[n.slug]=[ANCHORS[dom][0]+r*Math.cos(ang), ANCHORS[dom][1]+r*Math.sin(ang)];
+    });
+  });
+  var SVGNS='http://www.w3.org/2000/svg';
+  function el(tag,attrs,text){var e=document.createElementNS(SVGNS,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;return e;}
+  var halos=document.getElementById('g-halos');
+  Object.keys(ANCHORS).forEach(function(dom){
+    halos.appendChild(el('circle',{cx:ANCHORS[dom][0],cy:ANCHORS[dom][1],r:132,fill:'var(--cluster-'+dom+'-core)',opacity:0.1,filter:'url(#soft)'}));
+  });
+  var eg=document.getElementById('g-edges');
+  EDGES.forEach(function(ed){
+    var incident=(ed.a===FOCUS||ed.b===FOCUS);
+    var p1=pos[ed.a], p2=pos[ed.b];
+    var attrs={x1:p1[0],y1:p1[1],x2:p2[0],y2:p2[1],'stroke-width':1.6};
+    if(ed.kind==='bridge'){attrs['stroke-dasharray']='5 5';}
+    if(incident){attrs.stroke='var(--cluster-web3-core)';attrs.opacity=0.72;attrs['stroke-width']=2;}
+    else if(ed.kind==='kinship'){attrs.stroke='var(--border-strong)';attrs.opacity=0.55;}
+    else{attrs.stroke='var(--text-faint)';attrs.opacity=0.45;}
+    eg.appendChild(el('line',attrs));
+  });
+  var lg=document.getElementById('g-labels');
+  var LBL={
+    web3:{x:120,y:96,anchor:'start',n:7,name:'Web3'},
+    security:{x:880,y:96,anchor:'end',n:2,name:'Security'},
+    commerce:{x:120,y:628,anchor:'start',n:6,name:'Commerce'},
+    tools:{x:880,y:628,anchor:'end',n:3,name:'Tools / Labs'}
+  };
+  Object.keys(LBL).forEach(function(dom){
+    var L=LBL[dom]; var g=el('g',{class:'clabel'});
+    var t=el('text',{x:L.x,y:L.y,'text-anchor':L.anchor,fill:'var(--cluster-'+dom+'-text)'},GLYPH[dom]+'  '+L.name);
+    t.setAttribute('class','main');
+    var s=el('text',{x:L.x,y:L.y+18,'text-anchor':L.anchor,class:'sub'},L.n+' projects');
+    g.appendChild(t); g.appendChild(s); lg.appendChild(g);
+  });
+  var ng=document.getElementById('g-nodes');
+  NODES.forEach(function(n){
+    var p=pos[n.slug], r=RADIUS[n.prom], pub=PUB[n.slug];
+    var g=el('g',{class:'node'+(n.domain!=='web3'?' dim':'')});
+    if(pub){g.appendChild(el('circle',{cx:p[0],cy:p[1],r:r+9,fill:'var(--cluster-'+n.domain+'-core)',opacity:0.55,filter:'url(#glow)'}));}
+    g.appendChild(el('circle',{cx:p[0],cy:p[1],r:r,fill:'var(--cluster-'+n.domain+'-core)'}));
+    if(pub){g.appendChild(el('circle',{cx:p[0],cy:p[1],r:r+3.5,fill:'none',stroke:'var(--cluster-'+n.domain+'-text)','stroke-width':1.6}));}
+    if(n.slug===FOCUS){g.appendChild(el('circle',{cx:p[0],cy:p[1],r:r+9,fill:'none',stroke:'var(--ring)','stroke-width':2.5}));}
+    g.appendChild(el('text',{x:p[0],y:p[1]+r+18,'text-anchor':'middle'},n.name));
+    ng.appendChild(g);
+  });
+})();
+</script>
+</body>
+</html>

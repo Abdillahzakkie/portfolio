@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#FBFAF7">
+<title>Admin — Sign in (light)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FBFAF7; --bg-elevated:#FFFFFF; --surface:#FFFFFF; --surface-2:#F2F0EA;
+  --text:#1A1A1E; --text-muted:#55555F; --text-faint:#7C7C86;
+  --border:#E3E0D8; --border-strong:#CFCBC0; --ring:#4F46E5;
+  --cluster-web3-text:#4F46E5; --info:#4F46E5;
+  --font-display:'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-body:'Inter', ui-sans-serif, system-ui, sans-serif;
+  --radius-sm:6px; --radius-md:10px; --radius-lg:16px;
+  --elev-2:0 4px 12px rgba(20,20,30,.08); --elev-3:0 12px 32px rgba(20,20,30,.12);
+  color-scheme:light;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;height:100%;}
+body{background:var(--bg); color:var(--text); font-family:var(--font-body); font-size:16px;
+  min-height:100vh; display:grid; place-items:center; -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(var(--border) 1px, transparent 1px); background-size:24px 24px;}
+.brand{display:flex; align-items:center; justify-content:center; gap:9px; font-family:var(--font-display);
+  font-weight:700; font-size:22px; letter-spacing:-.01em; margin-bottom:20px;}
+.brand .glyph{color:var(--cluster-web3-text);}
+.brand .sep{color:var(--text-faint); font-weight:500;}
+.card{width:380px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-lg);
+  box-shadow:var(--elev-3); padding:32px 30px;}
+.card h1{font-family:var(--font-display); font-weight:700; font-size:24px; letter-spacing:-.01em; margin:0 0 6px;}
+.card .sub{font-size:14px; color:var(--text-muted); margin:0 0 24px;}
+.field{margin-bottom:16px;}
+.field label{display:block; font-size:13px; font-weight:600; color:var(--text); margin-bottom:6px;}
+.field input{width:100%; height:44px; padding:0 14px; font-family:var(--font-body); font-size:15px; color:var(--text);
+  background:var(--surface); border:1px solid var(--border-strong); border-radius:var(--radius-md); box-shadow:inset 0 1px 2px rgba(20,20,30,.04);}
+.field input::placeholder{color:var(--text-faint);}
+.field input:focus{outline:2px solid var(--ring); outline-offset:2px; border-color:var(--ring);}
+.btn-primary{width:100%; height:46px; margin-top:6px; border:none; border-radius:var(--radius-md); cursor:pointer;
+  background:var(--info); color:#fff; font-family:var(--font-body); font-weight:600; font-size:15px;}
+.btn-primary:hover{filter:brightness(1.05);}
+.alert{display:none;}
+.hint{margin-top:18px; text-align:center; font-size:12.5px; color:var(--text-faint);}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><span class="glyph">◆</span> AZ <span class="sep">·</span> Admin</div>
+  <form class="card" aria-label="Sign in">
+    <h1>Sign in</h1>
+    <p class="sub">Authoring access for the portfolio &amp; blog.</p>
+    <div class="alert" role="alert"></div>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="••••••••••">
+    </div>
+    <button class="btn-primary" type="submit">Sign in</button>
+    <p class="hint">Protected area · unauthorized visits are redirected here.</p>
+  </form>
+</main>
+</body>
+</html>

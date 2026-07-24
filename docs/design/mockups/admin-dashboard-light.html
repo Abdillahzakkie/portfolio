@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#FBFAF7">
+<title>Admin — Posts (dashboard, light)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FBFAF7; --bg-elevated:#FFFFFF; --surface:#FFFFFF; --surface-2:#F2F0EA;
+  --text:#1A1A1E; --text-muted:#55555F; --text-faint:#7C7C86;
+  --border:#E3E0D8; --border-strong:#CFCBC0; --ring:#4F46E5;
+  --cluster-web3-text:#4F46E5; --success:#047857; --warning:#B45309; --info:#4F46E5;
+  --font-display:'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-body:'Inter', ui-sans-serif, system-ui, sans-serif;
+  --radius-sm:6px; --radius-md:10px; --radius-lg:16px; --radius-full:9999px;
+  --elev-1:0 1px 2px rgba(20,20,30,.06); --elev-2:0 4px 12px rgba(20,20,30,.08);
+  color-scheme:light;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:var(--bg); color:var(--text); font-family:var(--font-body); font-size:16px; -webkit-font-smoothing:antialiased;}
+a{color:inherit;text-decoration:none;}
+.shell{display:grid; grid-template-columns:240px 1fr; min-height:100vh;}
+/* sidebar */
+.sidebar{background:var(--bg-elevated); border-right:1px solid var(--border); padding:20px 14px; display:flex; flex-direction:column;}
+.sb-brand{display:flex; align-items:center; gap:9px; font-family:var(--font-display); font-weight:700; font-size:19px; padding:6px 10px 20px;}
+.sb-brand .glyph{color:var(--cluster-web3-text);}
+.sb-brand .sep{color:var(--text-faint); font-weight:500; font-size:15px;}
+.sb-nav{display:flex; flex-direction:column; gap:2px;}
+.sb-nav a{display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:var(--radius-md); font-size:14.5px; font-weight:500; color:var(--text-muted);}
+.sb-nav a svg{opacity:.85;}
+.sb-nav a:hover{background:var(--surface-2); color:var(--text);}
+.sb-nav a.active{background:color-mix(in srgb, var(--info) 10%, transparent); color:var(--info); font-weight:600;}
+.sb-foot{margin-top:auto; font-size:12px; color:var(--text-faint); padding:10px 12px;}
+/* main */
+.main{display:flex; flex-direction:column;}
+.topbar{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 28px; border-bottom:1px solid var(--border); background:var(--bg-elevated);}
+.topbar h1{font-family:var(--font-display); font-weight:700; font-size:22px; margin:0;}
+.topbar .right{display:flex; align-items:center; gap:12px;}
+.btn-primary{display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 16px; border:none; border-radius:var(--radius-md); background:var(--info); color:#fff; font-family:var(--font-body); font-weight:600; font-size:14px; cursor:pointer;}
+.usermenu{display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 12px; border:1px solid var(--border-strong); border-radius:var(--radius-md); background:var(--surface); font-weight:600; font-size:14px; cursor:pointer;}
+.avatar{width:24px; height:24px; border-radius:50%; background:var(--info); color:#fff; display:grid; place-items:center; font-size:11px; font-weight:700;}
+.content{padding:24px 28px;}
+.toolbar{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px;}
+.tabs{display:flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:var(--radius-md);}
+.tabs button{border:none; background:transparent; padding:7px 16px; border-radius:8px; font-family:var(--font-body); font-weight:600; font-size:13.5px; color:var(--text-muted); cursor:pointer;}
+.tabs button[aria-selected="true"]{background:var(--bg-elevated); color:var(--text); box-shadow:var(--elev-1);}
+.search{display:flex; align-items:center; gap:8px; height:38px; padding:0 12px; border:1px solid var(--border-strong); border-radius:var(--radius-md); background:var(--surface); color:var(--text-faint); font-size:14px; width:240px;}
+.search input{border:none; background:transparent; outline:none; font-family:var(--font-body); font-size:14px; color:var(--text); width:100%;}
+/* table */
+.tablecard{background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--elev-1);}
+table{width:100%; border-collapse:collapse;}
+thead th{text-align:left; font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint); padding:14px 20px; border-bottom:1px solid var(--border); background:var(--surface-2);}
+tbody td{padding:16px 20px; border-bottom:1px solid var(--border); font-size:14.5px; vertical-align:middle;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:var(--surface-2);}
+.t-title{font-weight:600; color:var(--text);}
+.t-project{color:var(--text-muted); font-size:13.5px;}
+.t-project .g{color:var(--cluster-web3-text); margin-right:5px;}
+.t-updated{color:var(--text-faint); font-size:13.5px;}
+.statuspill{display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; padding:4px 11px; border-radius:var(--radius-full);}
+.statuspill.pub{background:color-mix(in srgb, var(--success) 12%, transparent); color:var(--success);}
+.statuspill.draft{background:color-mix(in srgb, var(--warning) 13%, transparent); color:var(--warning);}
+.statuspill .sdot{width:7px; height:7px; border-radius:50%; background:currentColor;}
+.rowmenu{width:32px; height:32px; border:none; background:transparent; border-radius:8px; color:var(--text-muted); cursor:pointer; font-size:18px; line-height:1;}
+.rowmenu:hover{background:var(--border);}
+.col-status,.col-menu{width:1%; white-space:nowrap;}
+.pager{display:flex; gap:6px; align-items:center; margin-top:18px; font-size:13px; color:var(--text-muted);}
+.pager button{width:30px; height:30px; border:1px solid var(--border-strong); background:var(--surface); border-radius:8px; cursor:pointer; color:var(--text);}
+.pager .cur{background:var(--text); color:var(--bg); border-color:var(--text); font-weight:600;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sb-brand"><span class="glyph">◆</span> AZ <span class="sep">· Admin</span></div>
+    <nav class="sb-nav" aria-label="Admin sections">
+      <a href="#" class="active" aria-current="page"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg> Posts</a>
+      <a href="#"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7"/></svg> Projects</a>
+      <a href="#"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg> Media</a>
+      <a href="#"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 6.6 19l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 4 13.6H4a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 5 6.6l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10.4 4V4a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg> Settings</a>
+    </nav>
+    <div class="sb-foot">Portfolio &amp; blog CMS</div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h1>Posts</h1>
+      <div class="right">
+        <button class="btn-primary"><span aria-hidden="true">＋</span> New post</button>
+        <button class="usermenu" aria-haspopup="menu"><span class="avatar">AZ</span> Abdullah <span aria-hidden="true">▾</span></button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="toolbar">
+        <div class="tabs" role="tablist" aria-label="Filter posts">
+          <button role="tab" aria-selected="true">All</button>
+          <button role="tab" aria-selected="false">Published</button>
+          <button role="tab" aria-selected="false">Drafts</button>
+        </div>
+        <label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input type="search" placeholder="Search posts…" aria-label="Search posts"></label>
+      </div>
+
+      <div class="tablecard">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Title</th>
+              <th scope="col">Project</th>
+              <th scope="col" class="col-status">Status</th>
+              <th scope="col">Updated</th>
+              <th scope="col" class="col-menu"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="t-title">Building a double-entry ledger on TigerBeetle</td>
+              <td class="t-project"><span class="g">◆</span>Settleo</td>
+              <td class="col-status"><span class="statuspill pub"><span class="sdot"></span>Published</span></td>
+              <td class="t-updated">2 days ago</td>
+              <td class="col-menu"><button class="rowmenu" aria-label="Row actions">⋯</button></td>
+            </tr>
+            <tr>
+              <td class="t-title">Rewriting a .NET NFT builder in Go at parity</td>
+              <td class="t-project"><span class="g">◆</span>NFTMixer (Go)</td>
+              <td class="col-status"><span class="statuspill pub"><span class="sdot"></span>Published</span></td>
+              <td class="t-updated">6 days ago</td>
+              <td class="col-menu"><button class="rowmenu" aria-label="Row actions">⋯</button></td>
+            </tr>
+            <tr>
+              <td class="t-title">Matching spyware IOCs with STIX 2.1</td>
+              <td class="t-project"><span class="g" style="color:var(--cluster-security-text,#BE123C)">▲</span>Sentova MTD</td>
+              <td class="col-status"><span class="statuspill draft"><span class="sdot"></span>Draft</span></td>
+              <td class="t-updated">just now</td>
+              <td class="col-menu"><button class="rowmenu" aria-label="Row actions">⋯</button></td>
+            </tr>
+            <tr>
+              <td class="t-title">The managerenta reference architecture</td>
+              <td class="t-project"><span class="g" style="color:#047857">●</span>Managerenta</td>
+              <td class="col-status"><span class="statuspill pub"><span class="sdot"></span>Published</span></td>
+              <td class="t-updated">3 weeks ago</td>
+              <td class="col-menu"><button class="rowmenu" aria-label="Row actions">⋯</button></td>
+            </tr>
+            <tr>
+              <td class="t-title">A 2-of-3 non-custodial escrow</td>
+              <td class="t-project"><span class="g">◆</span>Settleo Escrow</td>
+              <td class="col-status"><span class="statuspill draft"><span class="sdot"></span>Draft</span></td>
+              <td class="t-updated">1 day ago</td>
+              <td class="col-menu"><button class="rowmenu" aria-label="Row actions">⋯</button></td>
+            </tr>
+            <tr>
+              <td class="t-title">Rebuilding a task manager with React 19 and Fastify</td>
+              <td class="t-project"><span class="g" style="color:#B45309">✦</span>Aisolver</td>
+              <td class="col-status"><span class="statuspill pub"><span class="sdot"></span>Published</span></td>
+              <td class="t-updated">1 month ago</td>
+              <td class="col-menu"><button class="rowmenu" aria-label="Row actions">⋯</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager" aria-label="Pagination">
+        <button aria-label="Previous page">‹</button>
+        <button class="cur" aria-current="page">1</button>
+        <button>2</button>
+        <button aria-label="Next page">›</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
