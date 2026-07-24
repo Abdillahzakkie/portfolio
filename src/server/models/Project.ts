@@ -1,11 +1,16 @@
-import {
+import mongoose, {
   Schema,
   model,
-  models,
   type Model,
   type HydratedDocument,
   type InferSchemaType,
 } from 'mongoose';
+
+// Destructure `models` off the default export rather than importing it as a
+// named binding: under `"type":"module"` the bare-`tsx` ESM loader (used by
+// `pnpm seed`) cannot resolve a `models` named export from mongoose. This is the
+// same default-import interop pattern connect.ts already uses.
+const { models } = mongoose;
 import {
   DOMAINS,
   SLUG_REGEX,

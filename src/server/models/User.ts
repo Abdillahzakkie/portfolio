@@ -1,11 +1,14 @@
-import {
+import mongoose, {
   Schema,
   model,
-  models,
   type Model,
   type HydratedDocument,
   type InferSchemaType,
 } from 'mongoose';
+
+// See Project.ts: destructure `models` off the default export so bare-`tsx`
+// ESM (`pnpm seed`) can resolve it.
+const { models } = mongoose;
 import { USER_ROLES, type IUser } from './types';
 
 /**
