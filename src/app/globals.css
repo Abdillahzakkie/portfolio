@@ -1,0 +1,435 @@
+@import "tailwindcss";
+
+/* Class-based dark mode (we flip `.dark` on <html>, not prefers-color-scheme). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ==========================================================================
+   TOKEN LAYER — implements docs/design/01-tokens.md exactly.
+   Layer 1 (primitives) + Layer 2 (semantic) live here as CSS custom properties
+   in :root (light) and .dark. Layer 3 (Tailwind @theme) below maps the semantic
+   tokens to utilities. Components reference SEMANTIC tokens only.
+   ========================================================================== */
+
+:root {
+  /* --- Neutrals (surfaces + text) --- */
+  --bg: #fbfaf7;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f2f0ea;
+  --text: #1a1a1e;
+  --text-muted: #55555f;
+  --text-faint: #7c7c86;
+  --border: #e3e0d8;
+  --border-strong: #cfcbc0;
+  --ring: #4f46e5;
+
+  /* --- Domain / cluster accents (core fill + text variant) --- */
+  --cluster-web3-core: #6366f1;
+  --cluster-web3-text: #4f46e5;
+  --cluster-security-core: #f43f5e;
+  --cluster-security-text: #be123c;
+  --cluster-commerce-core: #10b981;
+  --cluster-commerce-text: #047857;
+  --cluster-tools-core: #f59e0b;
+  --cluster-tools-text: #b45309;
+
+  /* --- Status / feedback (reuse the 4 domain text hues) --- */
+  --success: #047857;
+  --warning: #b45309;
+  --danger: #be123c;
+  --info: #4f46e5;
+
+  /* --- Type scale (rem) --- */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --text-4xl: 3rem;
+  --text-5xl: 3.75rem;
+
+  /* --- Spacing (4px base) --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --content-max: 1200px;
+
+  /* --- Radii --- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* --- Elevation (light: soft shadows) --- */
+  --elev-1: 0 1px 2px rgba(20, 20, 30, 0.06);
+  --elev-2: 0 4px 12px rgba(20, 20, 30, 0.08);
+  --elev-3: 0 12px 32px rgba(20, 20, 30, 0.12);
+
+  /* --- Motion --- */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --dur-graph: 600ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0b0d12;
+  --bg-elevated: #14171f;
+  --surface: #171b24;
+  --surface-2: #1e232e;
+  --text: #ecedf1;
+  --text-muted: #a0a4b0;
+  --text-faint: #6b7280;
+  --border: #262b36;
+  --border-strong: #333a48;
+  --ring: #a5b4fc;
+
+  --cluster-web3-text: #a5b4fc;
+  --cluster-security-text: #fda4af;
+  --cluster-commerce-text: #6ee7b7;
+  --cluster-tools-text: #fcd34d;
+
+  --success: #6ee7b7;
+  --warning: #fcd34d;
+  --danger: #fda4af;
+  --info: #a5b4fc;
+
+  --elev-1: 0 0 0 1px var(--border);
+  --elev-2: 0 0 0 1px var(--border), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --elev-3: 0 0 0 1px var(--border-strong), 0 16px 48px rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
+}
+
+/* Layer 3 — expose semantic tokens as Tailwind v4 utilities
+   (bg-surface, text-muted, border-default, ring-focus, text-web3, …). */
+@theme {
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-default: var(--border);
+  --color-strong: var(--border-strong);
+  --color-focus: var(--ring);
+
+  --color-web3: var(--cluster-web3-core);
+  --color-web3-text: var(--cluster-web3-text);
+  --color-security: var(--cluster-security-core);
+  --color-security-text: var(--cluster-security-text);
+  --color-commerce: var(--cluster-commerce-core);
+  --color-commerce-text: var(--cluster-commerce-text);
+  --color-tools: var(--cluster-tools-core);
+  --color-tools-text: var(--cluster-tools-text);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body, ui-sans-serif, system-ui, sans-serif);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Font-family helpers (next/font sets --font-display/body/mono on <html>). */
+.font-display {
+  font-family: var(--font-display, ui-sans-serif, system-ui, sans-serif);
+}
+.font-body {
+  font-family: var(--font-body, ui-sans-serif, system-ui, sans-serif);
+}
+.font-mono {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+}
+
+/* Focus ring — every interactive element (tokens §5). */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--info) 28%, transparent);
+}
+
+/* Screen-reader-only, and a version that becomes visible on focus (skip link). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 100;
+  padding: 10px 16px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  transition: top var(--dur-fast) var(--ease-standard);
+}
+.skip-link:focus {
+  top: 12px;
+}
+
+/* Shared shimmer for skeletons. */
+@keyframes az-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.az-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    color-mix(in srgb, var(--surface-2) 55%, var(--bg-elevated)) 37%,
+    var(--surface-2) 63%
+  );
+  background-size: 200% 100%;
+  animation: az-shimmer 1.4s ease-in-out infinite;
+}
+
+/* Reduced motion: collapse every transition/animation (tokens §5/§6, WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .az-shimmer {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   PROSE (PostBody / case-study overview) — tokens §3, docs/04 PostBody
+   ========================================================================== */
+
+.prose {
+  max-width: 68ch;
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.72;
+}
+.prose > * + * {
+  margin-top: 20px;
+}
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  font-family: var(--font-display, ui-sans-serif, system-ui, sans-serif);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  scroll-margin-top: 88px;
+}
+.prose h2 {
+  font-size: 28px;
+  margin-top: 34px;
+}
+.prose h3 {
+  font-size: 20px;
+  margin-top: 28px;
+}
+.prose p {
+  margin: 0;
+}
+.prose a {
+  color: var(--ct, var(--info));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.prose a:hover {
+  text-decoration-thickness: 2px;
+}
+.prose strong {
+  font-weight: 600;
+}
+.prose ul,
+.prose ol {
+  padding-left: 1.4em;
+}
+.prose li {
+  margin-top: 6px;
+}
+.prose blockquote {
+  margin: 0;
+  padding: 6px 0 6px 22px;
+  border-left: 4px solid var(--ct, var(--info));
+  color: var(--text-muted);
+  font-size: 19px;
+  font-style: italic;
+  line-height: 1.6;
+}
+.prose :not(pre) > code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.88em;
+  background: var(--surface-2);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.prose pre {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.prose pre code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  background: none;
+  padding: 0;
+  white-space: pre;
+}
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+  font-size: 14px;
+}
+.prose th,
+.prose td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+.prose th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* ==========================================================================
+   CODE HIGHLIGHTING — self-contained highlight.js (lowlight) token theme,
+   themed with design tokens so it works in light + dark without a CDN asset.
+   ========================================================================== */
+
+.hljs {
+  color: var(--text);
+  background: transparent;
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--text-faint);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-doctag,
+.hljs-name {
+  color: var(--cluster-web3-text);
+  font-weight: 600;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--success);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-attr,
+.hljs-template-variable,
+.hljs-variable {
+  color: var(--cluster-tools-text);
+}
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-title.class_,
+.hljs-built_in,
+.hljs-builtin-name {
+  color: var(--cluster-commerce-text);
+}
+.hljs-function .hljs-title,
+.hljs-title.function_,
+.hljs-attribute {
+  color: var(--cluster-security-text);
+}
+.hljs-meta,
+.hljs-deletion {
+  color: var(--danger);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 700;
+}
