@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+# Newer push to the same ref cancels the older in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: install · typecheck · lint · build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm must be set up BEFORE setup-node so the node cache can key on it.
+      # Version comes from the `packageManager` field in package.json.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # --frozen-lockfile makes the lockfile authoritative: CI fails if
+      # package.json and pnpm-lock.yaml disagree, instead of silently resolving.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Hard gate. tsc --noEmit must pass on src/server/** today and on the whole
+      # app once the builders land. A type error fails the job.
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Hard gate. eslint must pass. No soft-fail / continue-on-error.
+      - name: Lint
+        run: pnpm lint
+
+      # The full `next build` needs the frontend entrypoint (src/app/layout.tsx +
+      # globals.css), which is frontend-dev (public)'s slice. Until it lands there
+      # is nothing to build. This detects it: when the entrypoint exists the build
+      # runs as a HARD gate (no continue-on-error); until then it is genuinely
+      # skipped, never a masked pass.
+      - name: Detect app entrypoint
+        id: app
+        run: |
+          if [ -f src/app/layout.tsx ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::src/app/layout.tsx not present yet — skipping build until frontend lands."
+          fi
+
+      - name: Build
+        if: steps.app.outputs.ready == 'true'
+        run: pnpm build
