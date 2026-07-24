@@ -39,6 +39,19 @@ const projectSlugSchema = z
     return t.length ? t : null;
   });
 
+/**
+ * The editor may send `domain: ''` for the "Auto from project / no domain"
+ * selection (an empty <select> value). Coerce `''`/`undefined` → null BEFORE the
+ * enum check so an empty selection is accepted as "no domain" (200) instead of
+ * failing the `z.enum(DOMAINS)` validation (400). The service ignores `domain` on
+ * write regardless (it's derived from the linked project) — this only keeps the
+ * trust-boundary parse robust to what the client actually sends.
+ */
+const domainSchema = z.preprocess(
+  (v) => (v === '' || v === undefined ? null : v),
+  z.enum(DOMAINS).nullable(),
+);
+
 const seoSchema = z
   .object({
     metaTitle: z.string().optional(),
@@ -59,7 +72,7 @@ export const postDraftSchema = z.object({
   title: z.string().trim().min(1, 'Title is required.').max(200),
   slug: slugSchema,
   projectSlug: projectSlugSchema.default(null),
-  domain: z.enum(DOMAINS).nullable().default(null),
+  domain: domainSchema.default(null),
   tags: z.array(z.string().trim().min(1)).default([]),
   excerpt: z.string().default(''),
   body: z.string().default(''),

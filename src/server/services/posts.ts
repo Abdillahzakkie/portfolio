@@ -252,7 +252,13 @@ export async function getPublishedPost(slug: string): Promise<{
     }
   }
 
-  // Prev/next within the published timeline (desc: newest first).
+  // Prev/next within the published timeline, sorted `publishedAt:-1` (newest
+  // first). SEMANTICS (frontend owns the visible labels): the list is ordered
+  // newest→oldest, so the entry BEFORE the current one (idx-1) is the NEWER post
+  // and the entry AFTER (idx+1) is the OLDER post. Therefore:
+  //   prevSlug → the NEWER (more recent) neighbouring post
+  //   nextSlug → the OLDER (earlier) neighbouring post
+  // This is intentional and unchanged; the frontend labels them accordingly.
   const ordered = await Post.find({ status: 'published' })
     .sort({ publishedAt: -1 })
     .select('slug')

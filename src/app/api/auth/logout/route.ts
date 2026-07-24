@@ -1,8 +1,9 @@
 /**
- * POST /api/auth/logout — clear the session cookie.
+ * POST /api/auth/logout — clear BOTH session cookies (access + refresh).
  *
  * A mutating route, so the middleware requires an existing session to reach it
- * (an unauthenticated logout is a no-op 401, which is harmless). Node runtime.
+ * (an unauthenticated logout is a no-op 401, which is harmless). `destroySession`
+ * deletes both the access and refresh cookies. Node runtime.
  */
 
 import { NextResponse } from 'next/server';
