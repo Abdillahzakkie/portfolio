@@ -57,17 +57,36 @@ export interface SavedPost {
   slug: string;
 }
 
+// The mutation routes wrap the saved post in a `{ post: … }` envelope (matching
+// GET/PATCH/publish/unpublish). Unwrap it here so callers get a bare SavedPost —
+// reading `.id`/`.slug` off the envelope silently yields undefined, which
+// previously caused duplicate creates and a `/api/posts/undefined/publish` 404.
+async function savePost(url: string, init: RequestInit): Promise<SavedPost> {
+  const { post } = await request<{ post: SavedPost }>(url, init);
+  return post;
+}
+
+// `domain` is a UI-only convenience field (the server derives it from the linked
+// project and ignores it on write). It is `Domain | ''` in the editor; sending
+// the empty string tripped the server's `z.enum(DOMAINS)` validation with a 400.
+// Strip it from the wire payload entirely — the source of truth is `projectSlug`.
+function toPayload<T extends { domain?: unknown }>(draft: T) {
+  const rest: Record<string, unknown> = { ...draft };
+  delete rest.domain;
+  return rest;
+}
+
 export function createPost(draft: PostDraft) {
-  return request<SavedPost>('/api/posts', {
+  return savePost('/api/posts', {
     method: 'POST',
-    body: JSON.stringify(draft),
+    body: JSON.stringify(toPayload(draft)),
   });
 }
 
 export function updatePost(id: string, draft: Partial<PostDraft>) {
-  return request<SavedPost>(`/api/posts/${id}`, {
+  return savePost(`/api/posts/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify(draft),
+    body: JSON.stringify(toPayload(draft)),
   });
 }
 
@@ -76,11 +95,11 @@ export function deletePost(id: string) {
 }
 
 export function publishPost(id: string) {
-  return request<SavedPost>(`/api/posts/${id}/publish`, { method: 'POST' });
+  return savePost(`/api/posts/${id}/publish`, { method: 'POST' });
 }
 
 export function unpublishPost(id: string) {
-  return request<SavedPost>(`/api/posts/${id}/unpublish`, { method: 'POST' });
+  return savePost(`/api/posts/${id}/unpublish`, { method: 'POST' });
 }
 
 export async function checkSlug(slug: string, exceptId?: string): Promise<boolean> {
