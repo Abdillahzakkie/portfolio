@@ -107,7 +107,7 @@ export function Header() {
             alignItems: 'center',
             gap: 8,
           }}
-          aria-label="Abdullah Zakariyya — home"
+          aria-label="AZ — Abdullah Zakariyya, home"
         >
           <span aria-hidden="true" style={{ color: 'var(--cluster-web3-text)' }}>
             ◆

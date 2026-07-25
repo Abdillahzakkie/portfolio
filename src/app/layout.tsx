@@ -44,11 +44,15 @@ export const metadata: Metadata = {
   description: SITE_DESC,
   applicationName: SITE_NAME,
   authors: [{ name: SITE_NAME }],
+  alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
     siteName: SITE_NAME,
+    url: '/',
     title: `${SITE_NAME} — Engineering portfolio`,
     description: SITE_DESC,
+    // NOTE: og:image intentionally omitted — needs a design asset (1200×630).
+    // Flagged for ui-ux-designer / backend to supply; see HANDOFF.
   },
   twitter: { card: 'summary_large_image' },
   robots: { index: true, follow: true },

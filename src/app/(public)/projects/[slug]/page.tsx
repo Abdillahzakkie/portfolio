@@ -21,10 +21,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: project.title,
     description: project.summary || project.heroText,
+    alternates: { canonical: `/projects/${slug}` },
     openGraph: {
       title: project.title,
       description: project.summary || project.heroText,
       type: 'article',
+      url: `/projects/${slug}`,
     },
   };
 }

@@ -32,10 +32,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: post.seo?.metaTitle || post.title,
     description: desc,
+    alternates: { canonical: `/blog/${slug}` },
     openGraph: {
       title: post.title,
       description: desc,
       type: 'article',
+      url: `/blog/${slug}`,
       publishedTime: post.publishedAt ?? undefined,
     },
   };
