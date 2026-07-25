@@ -51,6 +51,93 @@ No secrets, tokens, `.env` values, private keys, or credentials in content, seed
 or committed files. `.env` is gitignored; only `.env.example` is committed.
 
 ---
+# ✅ FINAL STATE — build complete & verified (2026-07-25)
+
+**Status: all 8 acceptance criteria MET.** 18 atomic commits on `master`, clean working
+tree. `pnpm build` ✓ (BUILD_ID present, 17 routes, real prod artifact — no dev artifact) ·
+`tsc --noEmit` 0 · `eslint` 0 · `pnpm audit --prod` clean · **vitest 26/26** · **Playwright
+e2e 20/20**. The detailed per-agent audit trail is in the Status log below; this section is
+the consolidated summary.
+
+## What was built
+A Next.js 15 (App Router) + TypeScript single app: a "Constellation of Work" domain-graph
+portfolio home + integrated blog with a full authenticated CMS. MongoDB via Mongoose
+(dev: shared Docker `localhost:27018` db `portfolio`; prod: Atlas). Tailwind v4 +
+CSS-variable token layer, self-hosted fonts (`next/font`). Deploy target: Vercel.
+
+- **Data/models** (`src/server/models`, `src/server/db`) — Project/Post/User, Markdown body, indexes.
+- **Backend** (`src/server/services`, `src/server/auth`, `src/app/api`, `src/middleware.ts`) —
+  Model→Service→Route triad, access/refresh auth, published-only sitemap/robots/RSS, seed.
+- **Public site** (`src/app/(public)`, `src/components/public`, `src/lib`, `src/app/layout.tsx`,
+  `globals.css`) — SVG constellation + SSR `<nav>` fallback, case studies, blog index/post.
+- **Admin CMS** (`src/app/admin`, `src/components/admin`) — login, dashboard, draft→publish editor.
+- **Content** (`content/`) — 18 projects + 18 posts (11 published / 7 draft), grounded in real repos.
+- **Tests** (`tests/`, `e2e/`) — vitest unit/integration + Playwright e2e.
+- **Config** — `package.json`, `tsconfig`, `next.config.ts`, `.env.example`, CI, `vercel.json`.
+
+## Acceptance criteria — all MET (evidence)
+1. **Builds clean** — `pnpm build` ✓, `tsc` 0, `eslint` 0.
+2. **Projects reachable** — e2e: 18 SVG nodes + 18 SSR links → `/projects/[slug]`, pointer+keyboard.
+3. **Post per project + sitemap + draft 404** — backlink renders; sitemap/RSS published-only; draft → real HTTP **404** (curl + e2e).
+4. **CMS end-to-end + auth** — e2e drives create→draft(private)→publish(public); unauth `/admin`→redirect, mutating `/api`→401.
+5. **Responsive** — 0 horizontal overflow @375 & @1440 (home/project/post).
+6. **Quality gates** — Lighthouse **SEO 100 / A11y 100**; axe **0 color-contrast** across 6 routes × light+dark.
+7. **No leakage** — blue-hat: `.env` gitignored, placeholders only, admin pw hashed from env, no secrets in build/content.
+8. **Graph home** — 18 clustered nodes, roving-tabindex + arrows + live-region, every node → real page; **respaced so labels don't overlap**.
+
+## Key decisions finalized (superseding earlier notes)
+- **Auth = access + refresh tokens** (owner-directed, replaces the original single 7-day session):
+  `az_session` access **1h** + `az_refresh` **6h absolute**, HS256, `typ`-discriminated, httpOnly.
+  Middleware silently mints a fresh access token from a valid refresh (forwarded same-request);
+  `POST /api/auth/refresh` for client retry; logout clears both; `AUTH_SECRET` ≥32-char floor;
+  role claim rejected if missing/invalid (least-privilege). Stateless (no revocation store).
+- **Styling** = Tailwind v4 + CSS-variable tokens (designer's call).
+- **Graph geometry** = viewBox **1280×860**, corner anchors, phyllotaxis **k=62**, frozen
+  `NODE_POSITIONS` relaxed against label boxes (0 overlaps). `next.config` `output:'standalone'`
+  removed (Windows build-trace bug; Vercel doesn't need it). Security headers added.
+- **Dependencies** patched via pnpm `overrides` (sharp ≥0.35, postcss ≥8.5.18) → audit clean.
+
+## Bugs found by verifiers & FIXED (all re-verified)
+- Admin API `{post}` envelope mis-unwrap → duplicate creates / publish-404 (`components/admin/api.ts`).
+- Editor `domain:""` → 400 on Save (client strips it + server coerces `''`→null).
+- `notFound()` soft-404 (HTTP 200) → real 404 by removing streaming `loading.tsx` boundaries.
+- WCAG-AA contrast (both themes): `--text-faint` darkened/lightened; new `--text-on-accent` token
+  replaces white-on-light-accent (was 1.99:1) in public + admin Button, ProjectBacklink, about CTA.
+- Inverted prev/next post-nav labels; dep CVEs; missing security headers; AUTH_SECRET floor; role fail-open.
+
+## ⏳ What's LEFT (non-blocking — owner decisions / deploy prep)
+1. **Prod env vars (required before deploy):** set on Vercel — `AUTH_SECRET` (real ≥32-char,
+   `openssl rand -base64 48`), `MONGODB_URI` (Atlas SRV), `MONGODB_DB=portfolio`,
+   `NEXT_PUBLIC_SITE_URL` (real domain), `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` (for seeding),
+   `AUTH_COOKIE_NAME`/`AUTH_REFRESH_COOKIE_NAME` (optional, have defaults). `.env` stays gitignored.
+2. **Project links (content):** all 18 projects have empty `links` (external repo/live URLs were
+   NOT invented, per the content-authenticity guard). Owner adds real repo/live URLs via the CMS
+   (or in `content/projects.ts`). #2 is met via name+stack+write-up link; external links are additive.
+3. **Publish gated write-ups:** 7 client/security posts are `draft` by policy (decision #2) — owner
+   publishes manually when ready.
+4. **Compliance decision (compliance-privacy):** the Sentova / Sentova-MTD **project case-study
+   pages** are public and disclose detection internals (within the letter of the policy, but their
+   *posts* are draft-gated). Decide whether those two project pages should also be gated.
+5. **Auth hardening (optional, for higher assurance):** stateless refresh has no revocation (a leaked
+   refresh is valid ≤6h) — add `jti` + a denylist (Vercel KV / Upstash Redis) if wanted. Login
+   rate-limit is in-memory/per-instance on Vercel — back with a shared store for durable protection.
+6. **SEO/social:** add a 1200×630 `og:image` asset + wire it (canonical + og:url already done).
+7. **Media uploads:** editor Cover is a URL field — add `POST /api/media` for a real uploader (optional).
+8. **A11y polish (optional):** some inline nav/footer links are <44px tall (pre-existing design
+   pattern; not an axe WCAG-AA failure) — give them ≥44px min-height if desired.
+
+## Run/deploy quick reference
+```bash
+docker ps | grep 27018                                   # shared Mongo up
+pnpm install
+SEED_ADMIN_EMAIL=… SEED_ADMIN_PASSWORD=… pnpm seed       # 18 projects + 18 posts + admin
+pnpm build && pnpm start                                 # or: pnpm dev
+pnpm test            # vitest 26/26
+pnpm test:e2e        # Playwright 20/20 (needs a prior pnpm build)
+# Deploy: push to GitHub → Vercel (set the env vars in #1 above); DB = Atlas.
+```
+
+---
 ## Status log (append your entry when done)
 - (orchestrator) Repo scaffolded, HANDOFF + ACCEPTANCE + INVENTORY written. Dispatching contract agents.
 - (ui-ux-designer) Design contract written to docs/design/00-04. Committed styling: Tailwind CSS v4 + CSS-variable tokens (justified over styled-components for App Router/RSC + Lighthouse). Concept: "Constellation of Work" — 18 real projects as stars in 4 domain clusters, static positioned (no force sim), SSR <nav> backbone + card fallback <768px, roving-tabindex keyboard nav, reduced-motion static mount. Fonts self-hosted via next/font (no runtime CDN). Backend TODO — define contracts for the [API] shapes listed in docs/design/04-components.md §[API]: ProjectNodeData, EdgeData (or accept static edges), PostRow/PostDraft (post.projectSlug is a REQUIRED link per ACCEPTANCE #3), slug-uniqueness check, and published-only sitemap/RSS. Frontend TODO — freeze exact node px positions per the anchors+phyllotaxis rule (02-graph-home §1); globals.css owns the token layer. Devops TODO — decide next/font/google (build-time self-host) vs next/font/local (.woff2 committed).
