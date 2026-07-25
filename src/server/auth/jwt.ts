@@ -12,7 +12,9 @@
  */
 
 import { SignJWT, jwtVerify } from 'jose';
-import type { UserRole } from '@/server/models';
+// Import from the runtime-free types module (NOT the models barrel, which pulls
+// mongoose) so this stays edge-safe. USER_ROLES is a plain const array.
+import { USER_ROLES, type UserRole } from '@/server/models/types';
 
 /** Name of the httpOnly ACCESS cookie (env-overridable per devops's contract). */
 export const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'az_session';
@@ -139,10 +141,15 @@ async function verifyTyped(
     // Reject cross-use: an access token must not pass as refresh and vice versa.
     if (payload.typ !== expected) return null;
     if (!payload.sub || typeof payload.email !== 'string') return null;
+    // Least-privilege: reject a token whose role claim is missing or not a known
+    // role rather than assuming `admin` (fail-closed on the authz dimension).
+    if (typeof payload.role !== 'string' || !USER_ROLES.includes(payload.role as UserRole)) {
+      return null;
+    }
     return {
       sub: payload.sub,
       email: payload.email,
-      role: (payload.role as UserRole) ?? 'admin',
+      role: payload.role as UserRole,
       name: typeof payload.name === 'string' ? payload.name : undefined,
     };
   } catch {
