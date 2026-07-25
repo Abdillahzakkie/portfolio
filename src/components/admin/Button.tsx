@@ -18,11 +18,13 @@ const sizes: Record<Size, string> = {
 };
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-[var(--info)] text-white hover:brightness-110',
+  // text-on-accent = #fff (light) / #0b0d12 (dark): white on the light dark-mode
+  // accent (#a5b4fc / #fda4af) fails WCAG AA (1.99:1), so use the theme-aware token.
+  primary: 'bg-[var(--info)] text-[var(--text-on-accent)] hover:brightness-110',
   secondary:
     'bg-[var(--surface)] text-[var(--text)] border border-[var(--border-strong)] hover:bg-[var(--surface-2)]',
   ghost: 'bg-transparent text-[var(--text)] hover:bg-[var(--surface-2)]',
-  danger: 'bg-[var(--danger)] text-white hover:brightness-110',
+  danger: 'bg-[var(--danger)] text-[var(--text-on-accent)] hover:brightness-110',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

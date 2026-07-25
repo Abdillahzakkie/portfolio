@@ -156,7 +156,9 @@ const btnPrimary: React.CSSProperties = {
   padding: '0 18px',
   borderRadius: 'var(--radius-md)',
   background: 'var(--info)',
-  color: '#fff',
+  // On dark, --info is a LIGHT accent, so white text fails AA (1.99:1). Use the
+  // theme-aware on-accent token (#fff light / #0b0d12 dark) — matches Button primary.
+  color: 'var(--text-on-accent)',
   fontWeight: 600,
   fontSize: 14,
 };

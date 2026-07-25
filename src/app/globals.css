@@ -18,7 +18,14 @@
   --surface-2: #f2f0ea;
   --text: #1a1a1e;
   --text-muted: #55555f;
-  --text-faint: #7c7c86;
+  /* Darkened from #7c7c86 (~3.95:1 on --bg) to meet WCAG 1.4.3 AA (4.5:1) for
+     meaningful text (post dates, "min read", kicker, dt labels). Now ~5.14:1 on
+     #FBFAF7 and ~5.36:1 on #FFFFFF. Dark-theme value is unchanged (0 violations). */
+  --text-faint: #6a6a72;
+  /* Text on an accent-filled surface (primary Button, backlink CTA). Light accent
+     fills (--info #4f46e5, cluster cores) are dark enough that white sits ≥4.5:1
+     (#fff on #4f46e5 = 6.29:1). Dark override lives in `.dark` below. */
+  --text-on-accent: #ffffff;
   --border: #e3e0d8;
   --border-strong: #cfcbc0;
   --ring: #4f46e5;
@@ -31,11 +38,16 @@
   --cluster-commerce-core: #10b981;
   --cluster-commerce-text: #047857;
   --cluster-tools-core: #f59e0b;
-  --cluster-tools-text: #b45309;
+  /* Darkened from #b45309: as text on its own 12% tint chip (#F2E6DA) it measured
+     ~4.09:1 (StatusPill "Draft" + tools-domain TagBadge). Now ~5.15:1 on that chip
+     over --bg and ≥4.7:1 over surface-2. Shared with --warning below (same hue). */
+  --cluster-tools-text: #9a4708;
 
   /* --- Status / feedback (reuse the 4 domain text hues) --- */
   --success: #047857;
-  --warning: #b45309;
+  /* Matches --cluster-tools-text (#9a4708) — darkened for the "Draft" StatusPill
+     chip contrast (see above). Dark-theme --warning unchanged. */
+  --warning: #9a4708;
   --danger: #be123c;
   --info: #4f46e5;
 
@@ -93,7 +105,17 @@
   --surface-2: #1e232e;
   --text: #ecedf1;
   --text-muted: #a0a4b0;
-  --text-faint: #6b7280;
+  /* Lightened from #6b7280 (~3.25:1 on the lightest dark surface #1e232e, ~4.02:1
+     on --bg) to clear WCAG 1.4.3 AA (4.5:1) for real text: post dates, "min read",
+     dt labels, home kicker, About copy, admin-login footer, and code comments in
+     .prose pre (which sit on --surface-2). Now measured on the four dark surfaces:
+     --surface-2 #1e232e = 5.12:1 (lightest → binding), --surface #171b24 = 5.61:1,
+     --bg-elevated #14171f = 5.83:1, --bg #0b0d12 = 6.33:1. Light value unchanged. */
+  --text-faint: #8d93a3;
+  /* Dark accent fills are LIGHT (--info #a5b4fc, cluster cores), so white text on
+     them fails (white on #a5b4fc = 1.99:1). Use a near-black label instead:
+     #0b0d12 on #a5b4fc = 9.75:1 (≥7:1). */
+  --text-on-accent: #0b0d12;
   --border: #262b36;
   --border-strong: #333a48;
   --ring: #a5b4fc;

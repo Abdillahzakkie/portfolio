@@ -108,7 +108,7 @@ export function ProjectBacklink({ project, domain, variant }: ProjectBacklinkPro
           padding: '0 18px',
           borderRadius: 'var(--radius-md)',
           background: 'var(--cc)',
-          color: '#fff',
+          color: 'var(--text-on-accent)',
           fontWeight: 600,
           fontSize: 14,
           whiteSpace: 'nowrap',

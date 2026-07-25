@@ -42,7 +42,7 @@ const SIZE: Record<Size, { minHeight: number; padding: string; font: number }> =
 function variantStyle(variant: Variant): CSSProperties {
   switch (variant) {
     case 'primary':
-      return { background: 'var(--info)', color: '#fff', borderColor: 'transparent' };
+      return { background: 'var(--info)', color: 'var(--text-on-accent)', borderColor: 'transparent' };
     case 'danger':
       return { background: 'var(--danger)', color: '#fff', borderColor: 'transparent' };
     case 'ghost':
