@@ -45,7 +45,7 @@ export function ZoomControls({
       style={{
         position: 'absolute',
         right: 12,
-        bottom: 12,
+        top: 12,
         display: 'flex',
         gap: 4,
         background: 'var(--surface)',

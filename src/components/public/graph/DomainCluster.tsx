@@ -45,7 +45,7 @@ export function DomainCluster({
       <circle
         cx={anchor.x}
         cy={anchor.y}
-        r={132}
+        r={165}
         fill={core}
         opacity={0.08}
         style={{ filter: 'url(#az-soft)' }}

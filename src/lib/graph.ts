@@ -6,11 +6,12 @@
  * (`ProjectNodeData`), but where each star sits and which stars are joined is
  * fixed design intent that must be deterministic so Playwright can assert #8.
  *
- * Coordinate space: viewBox `0 0 1000 700` (see docs/design/02-graph-home.md §1.1).
+ * Coordinate space: viewBox `0 0 1280 860` (see docs/design/02-graph-home.md §1.1).
  * Cluster anchors are the four quadrant centroids; NODE_POSITIONS were computed
- * once via sunflower/phyllotaxis (angle = i·137.5°, r = k·√i) around each anchor,
- * then relaxed so no two node circles (radius by prominence) overlap, then FROZEN
- * here. Do not recompute at runtime — these exact values are the contract.
+ * once via sunflower/phyllotaxis (angle = i·137.5°, r = k·√i, k = 62) around each
+ * anchor, then relaxed so no two nodes' *label boxes* (not just circles) overlap,
+ * then FROZEN here. Do not recompute at runtime — these exact values are the
+ * contract Playwright asserts (#8).
  */
 
 import type { Domain } from '@/server/models';
@@ -20,7 +21,7 @@ import type { ProjectNodeData } from './types';
  *  match the CSS custom-property names (`--cluster-tools-*`) and glyph set. */
 export type ClusterKey = 'web3' | 'security' | 'commerce' | 'tools';
 
-export const VIEWBOX = { width: 1000, height: 700 } as const;
+export const VIEWBOX = { width: 1280, height: 860 } as const;
 
 /** Map the data-model domain onto the visual cluster key. */
 export function domainToCluster(domain: Domain): ClusterKey {
@@ -35,12 +36,14 @@ export const CLUSTER_GLYPH: Record<ClusterKey, string> = {
   tools: '✦',
 };
 
-/** Four cluster anchors (centroids) in viewBox units — docs 02 §1.1. */
+/** Four cluster anchors (centroids) in viewBox units — docs 02 §1.1. Pushed
+ *  toward the corners (≈620px apart horizontally, ≈360px vertically) so the four
+ *  clusters read as clearly separate constellations. */
 export const CLUSTER_ANCHORS: Record<ClusterKey, { x: number; y: number }> = {
-  web3: { x: 270, y: 210 },
-  security: { x: 730, y: 210 },
-  commerce: { x: 270, y: 490 },
-  tools: { x: 730, y: 490 },
+  web3: { x: 330, y: 250 },
+  security: { x: 950, y: 250 },
+  commerce: { x: 330, y: 610 },
+  tools: { x: 950, y: 610 },
 };
 
 /** Corner label placements (glyph + name sit outside each halo, toward a corner). */
@@ -48,10 +51,10 @@ export const CLUSTER_LABEL_POS: Record<
   ClusterKey,
   { x: number; y: number; anchor: 'start' | 'end' }
 > = {
-  web3: { x: 120, y: 96, anchor: 'start' },
-  security: { x: 880, y: 96, anchor: 'end' },
-  commerce: { x: 120, y: 628, anchor: 'start' },
-  tools: { x: 880, y: 628, anchor: 'end' },
+  web3: { x: 150, y: 115, anchor: 'start' },
+  security: { x: 1130, y: 115, anchor: 'end' },
+  commerce: { x: 150, y: 815, anchor: 'start' },
+  tools: { x: 1130, y: 815, anchor: 'end' },
 };
 
 /** Visible node radius by prominence (viewBox units) — docs 02 §1.1. */
@@ -65,34 +68,36 @@ export function hitRadius(prominence: 1 | 2 | 3): number {
 }
 
 /**
- * FROZEN node positions (viewBox units). Computed via phyllotaxis + overlap
- * relaxation (k = 44, min gap = r_a + r_b + 14), rounded to 0.1. Zero residual
- * circle overlaps; all coords sit inside the viewBox with margin. Keyed by slug.
+ * FROZEN node positions (viewBox units). Computed via phyllotaxis (k = 62) + AABB
+ * relaxation against each node's *label box* (name width + a 22px label height
+ * below the circle, min gap 8), rounded to 0.1. Zero residual label-box overlaps
+ * AND zero circle overlaps at the default fit; all coords sit inside the viewBox
+ * `0 0 1280 860` with margin (box bounds ≈ x[130,1005] y[112,718]). Keyed by slug.
  */
 export const NODE_POSITIONS: Readonly<Record<string, { x: number; y: number }>> =
   Object.freeze({
     // Web3 (top-left)
-    settleo: { x: 278.8, y: 204.5 },
-    'nftmixer-go': { x: 228.9, y: 247.7 },
-    'gkoi-platform': { x: 275.3, y: 145.6 },
-    'gkoi-contracts': { x: 316.4, y: 270.5 },
-    'settleo-escrow': { x: 183.3, y: 194.7 },
-    'nftmixer-net': { x: 353, y: 157.1 },
-    'gkoi-apps': { x: 242.1, y: 314.1 },
+    settleo: { x: 275.5, y: 297.2 },
+    'nftmixer-go': { x: 336.8, y: 212.1 },
+    'gkoi-platform': { x: 384.5, y: 293.5 },
+    'gkoi-contracts': { x: 330, y: 131.4 },
+    'settleo-escrow': { x: 198.5, y: 218.1 },
+    'nftmixer-net': { x: 330, y: 372.2 },
+    'gkoi-apps': { x: 454.7, y: 225.5 },
     // Security (top-right)
-    sentova: { x: 735.5, y: 204.9 },
-    'sentova-mtd': { x: 692, y: 244.8 },
+    sentova: { x: 950, y: 209.5 },
+    'sentova-mtd': { x: 950, y: 290.5 },
     // Commerce (bottom-left)
-    managerenta: { x: 272.9, y: 487.3 },
-    chekka: { x: 234.6, y: 522.4 },
-    'golden-bite': { x: 275.4, y: 428 },
-    prechop: { x: 316.4, y: 550.5 },
-    adverta: { x: 183.3, y: 474.7 },
-    mogadget: { x: 353, y: 437.1 },
+    managerenta: { x: 330, y: 523.4 },
+    chekka: { x: 331.1, y: 596.7 },
+    'golden-bite': { x: 280, y: 670.2 },
+    prechop: { x: 408.9, y: 602.8 },
+    adverta: { x: 380.1, y: 664.8 },
+    mogadget: { x: 250, y: 602.2 },
     // Tools / Labs (bottom-right)
-    aisolver: { x: 730.7, y: 489.3 },
-    fivestick: { x: 696.8, y: 520.4 },
-    labs: { x: 735.4, y: 428 },
+    aisolver: { x: 950, y: 610.3 },
+    fivestick: { x: 950, y: 677.3 },
+    labs: { x: 950, y: 542.3 },
   });
 
 /** Fallback position for any slug not in the frozen map (unseeded/new project).

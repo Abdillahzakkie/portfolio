@@ -34,21 +34,23 @@ targets make that flaky.
 
 ### 1.1 Coordinate model
 
-- A fixed **viewBox** of `0 0 1000 700` (10:7). All node positions are authored in
+- A fixed **viewBox** of `0 0 1280 860` (≈3:2). All node positions are authored in
   this space and scale with the SVG; the SVG is `width:100%` with
-  `preserveAspectRatio="xMidYMid meet"`.
+  `preserveAspectRatio="xMidYMid meet"`. (Enlarged from the original `1000×700`,
+  with anchors pushed toward the corners, so the dense 7-node Web3 and 6-node
+  Commerce clusters have room for their text labels to sit clear of one another.)
 - Four **cluster anchors** (centroids) in viewBox units:
-  - Web3 → (270, 210) top-left
-  - Security → (730, 210) top-right
-  - Commerce → (270, 490) bottom-left
-  - Tools/Labs → (730, 490) bottom-right
+  - Web3 → (330, 250) top-left
+  - Security → (950, 250) top-right
+  - Commerce → (330, 610) bottom-left
+  - Tools/Labs → (950, 610) bottom-right
 - Within a cluster, nodes are placed by **sunflower/phyllotaxis** around the
-  anchor: node *i* at angle `i * 137.5°`, radius `k * sqrt(i)` (k ≈ 34), so
-  clusters stay compact and non-overlapping regardless of count (scales to the
-  6-per-cluster ceiling noted in `00-concept.md`). Positions are computed once and
-  frozen into a `NODE_POSITIONS` map the frontend commits — **the design intent is
-  the anchors + packing rule; exact px are frontend's to freeze and Playwright to
-  assert.**
+  anchor: node *i* at angle `i * 137.5°`, radius `k * sqrt(i)` (k ≈ 62), then
+  **relaxed against label boxes** (not just circles) so neither the circles nor the
+  name labels below them collide at the default fit, regardless of count. Positions
+  are computed once and frozen into a `NODE_POSITIONS` map the frontend commits —
+  **the design intent is the anchors + packing rule; exact px are frontend's to
+  freeze and Playwright to assert.**
 - Node radius by prominence: `3 → r=26`, `2 → r=19`, `1 → r=13` (viewBox units).
   Invisible hit-area radius = `max(visibleR, 22)` so every node meets the 44px
   touch target after scaling (§ token 5).
