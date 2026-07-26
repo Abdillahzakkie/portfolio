@@ -11,13 +11,13 @@ interface NavItem {
   icon: (p: { className?: string }) => ReactNode;
 }
 
-// Only "Posts" is an implemented route in this slice; the others are part of the
-// admin IA but out of scope, so they render as disabled (never dead 404 links).
+// Posts, Projects and Settings are implemented routes; Media is still part of
+// the admin IA but out of scope, so it renders disabled (never a dead 404 link).
 const ITEMS: NavItem[] = [
   { key: 'posts', label: 'Posts', href: '/admin', icon: PostsIcon },
-  { key: 'projects', label: 'Projects', icon: ProjectsIcon },
+  { key: 'projects', label: 'Projects', href: '/admin/projects', icon: ProjectsIcon },
   { key: 'media', label: 'Media', icon: MediaIcon },
-  { key: 'settings', label: 'Settings', icon: SettingsIcon },
+  { key: 'settings', label: 'Settings', href: '/admin/settings', icon: SettingsIcon },
 ];
 
 const itemBase =
