@@ -19,6 +19,8 @@ next-env.d.ts.bak
 .env.test.local
 .env.production.local
 .env*.local
+*.env*
+!.env.example
 
 # Test + coverage artifacts
 coverage/

@@ -11,20 +11,36 @@
  * written to any committed file (ACCEPTANCE #7 / HANDOFF absolute guard).
  */
 
-import { connectToDatabase, disconnectFromDatabase } from '@/server/db/connect';
-import {
-  Project,
-  Post,
-  User,
-  type ProjectSeedInput,
-  type PostSeedInput,
-} from '@/server/models';
-import { computeReadingTime } from '@/server/services';
-import { hashPassword } from '@/server/auth/password';
+// `pnpm seed` runs under bare `tsx`, which (unlike `next`) does NOT auto-load
+// `.env.local`. Without this, `SEED_ADMIN_PASSWORD` / `MONGODB_URI` / `MONGODB_DB`
+// are unset and a fresh DB gets the printed DEV-default admin password on the
+// DEFAULT local DB — mismatching `.env.local` and the e2e specs. `dotenv` is not a
+// dependency, so use Node's built-in `process.loadEnvFile` (Node >=20.6; the
+// project requires >=24). Guarded for availability and for a missing file so a
+// bare `process.env` still works.
+//
+// This MUST run before any module that captures env at import-eval time — e.g.
+// `db/connect` reads MONGODB_URI/MONGODB_DB into module-level consts. A static
+// ESM `import` is HOISTED above this statement (verified: the imported module's
+// top-level env read fires before `loadEnvFile`), so the runtime value modules
+// are pulled in via top-level dynamic `import()` AFTER the env file is loaded.
+// Type-only imports are erased and trigger no evaluation, so they stay static.
+try {
+  process.loadEnvFile?.('.env.local');
+} catch {
+  // No `.env.local` present — fall back to the ambient process env / dev defaults.
+}
+
+import type { ProjectSeedInput, PostSeedInput } from '@/server/models';
+
+const { connectToDatabase, disconnectFromDatabase } = await import('@/server/db/connect');
+const { Project, Post, User } = await import('@/server/models');
+const { computeReadingTime } = await import('@/server/services');
+const { hashPassword } = await import('@/server/auth/password');
 // Content lives at repo-root `content/` (tech-writer's slice). The `@/*` alias
 // maps to `src/*` only, so `@/content` does NOT resolve — use a relative path.
 // (Flagged in HANDOFF: add a tsconfig `@/content` path if the alias is desired.)
-import { projects as seedProjectData, posts as seedPostData } from '../../../content';
+const { projects: seedProjectData, posts: seedPostData } = await import('../../../content');
 
 async function seedProjects(projects: ProjectSeedInput[]): Promise<Set<string>> {
   const slugs = new Set<string>();
