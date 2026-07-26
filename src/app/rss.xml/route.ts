@@ -7,8 +7,10 @@
 import { getRssItems } from '@/server/services';
 
 export const runtime = 'nodejs';
-// Revalidate hourly — the feed is derived from published content.
-export const revalidate = 3600;
+// Render at request time, not at build — the DB is unreachable from Vercel's
+// build container (Atlas IP allow-list), so prerendering would fail the build.
+// CDN caching is still applied via the s-maxage header below.
+export const dynamic = 'force-dynamic';
 
 const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
@@ -29,7 +31,13 @@ function escapeXml(value: string): string {
 }
 
 export async function GET(): Promise<Response> {
-  const items = await getRssItems();
+  // A DB outage must never 500 the feed — serve an empty channel instead.
+  let items: Awaited<ReturnType<typeof getRssItems>> = [];
+  try {
+    items = await getRssItems();
+  } catch (err) {
+    console.error('[rss] failed to load items, serving empty feed:', err);
+  }
 
   const body = items
     .map((item) => {
