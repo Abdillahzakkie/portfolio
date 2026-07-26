@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Space_Grotesk, Inter, JetBrains_Mono } from 'next/font/google';
+import { getSiteSettings } from '@/server/services';
 import './globals.css';
 
 /**
@@ -29,34 +30,34 @@ const mono = JetBrains_Mono({
   display: 'swap',
 });
 
-const SITE_NAME = 'Abdullah Zakariyya';
-const SITE_DESC =
-  'A body of engineering work as a star map — Web3, Security, Commerce and Tools, with a companion write-up per project.';
-
-export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000',
-  ),
-  title: {
-    default: `${SITE_NAME} — Engineering portfolio`,
-    template: `%s · ${SITE_NAME}`,
-  },
-  description: SITE_DESC,
-  applicationName: SITE_NAME,
-  authors: [{ name: SITE_NAME }],
-  alternates: { canonical: '/' },
-  openGraph: {
-    type: 'website',
-    siteName: SITE_NAME,
-    url: '/',
-    title: `${SITE_NAME} — Engineering portfolio`,
-    description: SITE_DESC,
-    // NOTE: og:image intentionally omitted — needs a design asset (1200×630).
-    // Flagged for ui-ux-designer / backend to supply; see HANDOFF.
-  },
-  twitter: { card: 'summary_large_image' },
-  robots: { index: true, follow: true },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { siteName, siteDescription, defaultOgImage } = await getSiteSettings();
+  return {
+    metadataBase: new URL(
+      process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000',
+    ),
+    title: {
+      default: `${siteName} — Engineering portfolio`,
+      template: `%s · ${siteName}`,
+    },
+    description: siteDescription,
+    applicationName: siteName,
+    authors: [{ name: siteName }],
+    alternates: { canonical: '/' },
+    openGraph: {
+      type: 'website',
+      siteName,
+      url: '/',
+      title: `${siteName} — Engineering portfolio`,
+      description: siteDescription,
+      // og:image supplied from site settings when configured (1200×630 asset).
+      // When defaultOgImage is empty it is omitted, as before.
+      ...(defaultOgImage ? { images: [defaultOgImage] } : {}),
+    },
+    twitter: { card: 'summary_large_image' },
+    robots: { index: true, follow: true },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: [

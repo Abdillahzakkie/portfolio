@@ -1,11 +1,11 @@
-const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL ?? 'https://github.com';
-const EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? 'hello@example.com';
+import { getSiteSettings } from '@/server/services';
 
 /**
  * Public footer landmark. RSS points at the backend-emitted feed (/rss.xml).
  * All links keyboard reachable; external links get rel="noopener".
  */
-export function Footer() {
+export async function Footer() {
+  const settings = await getSiteSettings();
   const year = new Date().getFullYear();
   const linkStyle: React.CSSProperties = { color: 'var(--text-muted)' };
   return (
@@ -26,12 +26,12 @@ export function Footer() {
           color: 'var(--text-muted)',
         }}
       >
-        <span>© {year} Abdullah Zakariyya</span>
+        <span>© {year} {settings.siteName}</span>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+          <a href={settings.githubUrl} target="_blank" rel="noopener noreferrer" style={linkStyle}>
             GitHub
           </a>
-          <a href={`mailto:${EMAIL}`} style={linkStyle}>
+          <a href={`mailto:${settings.contactEmail}`} style={linkStyle}>
             Email
           </a>
           <a href="/rss.xml" style={linkStyle}>

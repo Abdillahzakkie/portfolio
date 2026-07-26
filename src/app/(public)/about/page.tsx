@@ -1,14 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { getSiteSettings } from '@/server/services';
 
 export const metadata: Metadata = {
   title: 'About',
   description:
     'Abdullah Zakariyya — an engineer building across Web3, security, and Nigeria-focused commerce.',
 };
-
-const EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? 'hello@example.com';
-const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL ?? 'https://github.com';
 
 const DISCIPLINES: { key: string; glyph: string; label: string; body: string }[] = [
   {
@@ -38,7 +36,8 @@ const DISCIPLINES: { key: string; glyph: string; label: string; body: string }[]
 ];
 
 /** About `/about` — bio + disciplines + contact. */
-export default function AboutPage() {
+export default async function AboutPage() {
+  const settings = await getSiteSettings();
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px 40px' }}>
       <p
@@ -63,7 +62,7 @@ export default function AboutPage() {
           margin: '10px 0 20px',
         }}
       >
-        Abdullah Zakariyya
+        {settings.siteName}
       </h1>
 
       <div className="prose">
@@ -132,12 +131,12 @@ export default function AboutPage() {
         </h2>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <a
-            href={`mailto:${EMAIL}`}
+            href={`mailto:${settings.contactEmail}`}
             style={btnPrimary}
           >
             Email me
           </a>
-          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" style={btnSecondary}>
+          <a href={settings.githubUrl} target="_blank" rel="noopener noreferrer" style={btnSecondary}>
             GitHub ↗
           </a>
           <Link href="/blog" style={btnSecondary}>
