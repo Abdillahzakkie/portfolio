@@ -35,10 +35,18 @@ export class NotFoundError extends ServiceError {
   }
 }
 
-/** The write conflicts with existing state (e.g. slug already taken). */
+/**
+ * The write conflicts with existing state (e.g. slug already taken, or a delete
+ * blocked by referencing rows). `details` carries an optional structured payload
+ * (e.g. `{ code: 'linked_posts', count: n }`) the route can surface to the client
+ * WITHOUT the generic `handleApiError` path changing for plain conflicts.
+ */
 export class ConflictError extends ServiceError {
-  constructor(message: string) {
+  readonly details?: Record<string, unknown>;
+
+  constructor(message: string, details?: Record<string, unknown>) {
     super(message, 409, 'conflict');
+    this.details = details;
   }
 }
 

@@ -194,3 +194,26 @@ export interface IUser {
 
 /** A User safe to expose to a client (hash stripped). */
 export type PublicUser = Omit<IUser, 'passwordHash'>;
+
+// ---------------------------------------------------------------------------
+// SiteSettings (singleton)
+// ---------------------------------------------------------------------------
+
+/** The single legal discriminator value pinning the SiteSettings singleton row. */
+export const SITE_SETTINGS_KEY = 'site' as const;
+
+/**
+ * Site-wide config the admin edits at runtime (was previously hardcoded module
+ * constants). Exactly one document exists (see SiteSettings model's `key`
+ * singleton anchor, which is NOT part of this public contract).
+ */
+export interface ISiteSettings {
+  _id: string;
+  siteName: string;
+  siteDescription: string;
+  githubUrl: string;
+  contactEmail: string;
+  defaultOgImage: string;
+  createdAt: string;
+  updatedAt: string;
+}

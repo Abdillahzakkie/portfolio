@@ -18,5 +18,9 @@ import { UnauthorizedError } from '@/server/services';
 export async function requireAdmin(): Promise<PublicUser> {
   const user = await getSession();
   if (!user) throw new UnauthorizedError();
+  // Name-and-fact: assert the role, not just that a session exists. `editor` is
+  // reserved in USER_ROLES; without this check such an account would silently
+  // inherit full admin CRUD + password-change. Only `admin` is authorized here.
+  if (user.role !== 'admin') throw new UnauthorizedError();
   return user;
 }

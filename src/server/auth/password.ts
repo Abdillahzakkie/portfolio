@@ -9,6 +9,10 @@
 import bcrypt from 'bcryptjs';
 import { connectToDatabase } from '@/server/db/connect';
 import { User, type PublicUser } from '@/server/models';
+// Deep-import the error types (not the barrel) so the `tsx` seed — which imports
+// this module for `hashPassword` — does not pull the whole service layer
+// (settings.ts → next/cache) into a non-Next runtime.
+import { UnauthorizedError, ValidationError } from '@/server/services/errors';
 
 /** bcrypt cost factor. 12 ≈ ~250ms — a sane interactive-login default. */
 const BCRYPT_ROUNDS = 12;
@@ -54,4 +58,38 @@ export async function verifyLogin(
 
   // toJSON strips passwordHash (model transform); serialize to the public shape.
   return JSON.parse(JSON.stringify(user.toJSON())) as PublicUser;
+}
+
+/**
+ * Change an admin's password. Verifies the CURRENT password against the stored
+ * hash before writing a new one. A missing user OR a wrong current password both
+ * throw a GENERIC `UnauthorizedError` — the caller shows a single message and
+ * never reveals which check failed. `newPassword` must be ≥ 8 chars.
+ *
+ * The plaintext password and the hash NEVER leave this function (not logged, not
+ * returned).
+ */
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await connectToDatabase();
+
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    throw new ValidationError('New password must be at least 8 characters.');
+  }
+
+  const user = await User.findById(userId).select('+passwordHash');
+  if (!user || !user.passwordHash) {
+    // Perform a compare against a dummy hash to keep timing constant.
+    await bcrypt.compare(currentPassword, DUMMY_HASH);
+    throw new UnauthorizedError('Current password is incorrect.');
+  }
+
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!ok) throw new UnauthorizedError('Current password is incorrect.');
+
+  user.passwordHash = await hashPassword(newPassword);
+  await user.save();
 }

@@ -80,6 +80,49 @@ export interface PostDraft {
   readingTime?: number;
 }
 
+/** One row in the admin project table. */
+export interface ProjectRow {
+  id: string;
+  title: string;
+  slug: string;
+  domain: Domain;
+  featured: boolean;
+  order: number;
+  /** Count of Posts linked to this project (any status), batched — no N+1. */
+  relatedPostCount: number;
+  updatedAt: string;
+}
+
+/**
+ * The full editable project payload used by the admin editor (load + save).
+ *
+ * `id` is absent when creating. `slug` is IMMUTABLE after creation — the update
+ * service ignores any incoming slug. `relatedPostSlugs` is server-DERIVED and
+ * read-only (ignored on write; the reverse-nav cache is owned by the post layer).
+ */
+export interface ProjectDraft {
+  id?: string;
+  title: string;
+  slug: string;
+  domain: Domain;
+  summary: string;
+  role: string;
+  stack: string[];
+  heroText: string;
+  longDescription: string;
+  links: {
+    repo?: string;
+    live?: string;
+    docs?: string;
+    extra?: { label: string; url: string }[];
+  };
+  graph: { cluster?: string; x?: number; y?: number; weight?: number };
+  order: number;
+  featured: boolean;
+  /** Server-DERIVED, read-only; ignored on write. */
+  relatedPostSlugs: string[];
+}
+
 /** Everything the public case-study page needs for one project. */
 export interface ProjectView {
   project: IProject;

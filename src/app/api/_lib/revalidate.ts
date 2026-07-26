@@ -8,7 +8,8 @@
  * AFTER a successful status transition.
  */
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
+import { SITE_SETTINGS_TAG } from '@/server/services';
 
 /** Public surfaces that list/aggregate published posts (all statically cached). */
 const PUBLIC_INDEX_PATHS = ['/', '/blog', '/sitemap.xml', '/rss.xml'] as const;
@@ -28,4 +29,29 @@ export function revalidatePublicPost(
   }
   if (slug) revalidatePath(`/blog/${slug}`);
   if (projectSlug) revalidatePath(`/projects/${projectSlug}`);
+}
+
+/**
+ * Revalidate the public surfaces a project edit changes: the graph home (`/`,
+ * where featured projects render as nodes) and the project's own case-study page.
+ * Called from the project create/update/delete route handlers after a successful
+ * write.
+ */
+export function revalidatePublicProject(slug: string): void {
+  revalidatePath('/');
+  if (slug) revalidatePath(`/projects/${slug}`);
+}
+
+/**
+ * Revalidate everything that reads site settings: the cache tag the settings
+ * service stores its read under (so the cross-request cached value refreshes),
+ * plus EVERY statically-prerendered public page. `siteName` renders in the root
+ * layout (footer + title) on every route (`/projects/[slug]`, `/blog/[slug]`,
+ * …), so revalidating only `/`, `/about`, `/blog` left the rest stale.
+ * `revalidatePath('/', 'layout')` revalidates every route nested under the root
+ * layout, covering them all. Called after a successful settings write.
+ */
+export function revalidateSiteSettings(): void {
+  revalidateTag(SITE_SETTINGS_TAG);
+  revalidatePath('/', 'layout');
 }

@@ -16,6 +16,8 @@ export type {
   PostListItem,
   PostRow,
   PostDraft,
+  ProjectRow,
+  ProjectDraft,
   ProjectView,
   RssItem,
   SitemapData,
@@ -30,14 +32,28 @@ export {
   UnauthorizedError,
 } from './errors';
 
-// Project services.
+// Project services (public reads + admin CRUD).
 export {
   getConstellation,
   getProjectView,
   listProjectOptions,
   projectExists,
   listFeaturedProjectRefs,
+  listProjectsForAdmin,
+  getProjectForEditor,
+  isProjectSlugAvailable,
+  createProject,
+  updateProject,
+  deleteProject,
 } from './projects';
+
+// Settings services (site singleton + admin profile).
+export {
+  getSiteSettings,
+  updateSiteSettings,
+  updateProfile,
+  SITE_SETTINGS_TAG,
+} from './settings';
 
 // Post services (public reads + admin CMS + publish lifecycle).
 export {

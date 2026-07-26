@@ -19,3 +19,6 @@ export type { PostDocument, PostDocProps } from './Post';
 
 export { User, default as UserModel } from './User';
 export type { UserDocument, UserDocProps } from './User';
+
+export { SiteSettings, default as SiteSettingsModel } from './SiteSettings';
+export type { SiteSettingsDocument, SiteSettingsDocProps } from './SiteSettings';

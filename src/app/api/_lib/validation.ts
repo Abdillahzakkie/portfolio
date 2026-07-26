@@ -86,3 +86,116 @@ export const postDraftSchema = z.object({
 export function parsePostDraft(input: unknown): PostDraft {
   return postDraftSchema.parse(input) satisfies PostDraft;
 }
+
+// ---------------------------------------------------------------------------
+// Projects (admin CRUD)
+// ---------------------------------------------------------------------------
+
+/**
+ * A URL string, or the empty string (a cleared/optional link field).
+ *
+ * SECURITY: `z.string().url()` accepts `javascript:`, `data:`, and `vbscript:`
+ * URLs — these persist and later flow into public `<a href>` / og:image, a
+ * stored-XSS vector. Parse via `new URL()` and allow ONLY the `http:`/`https:`
+ * schemes so a dangerous scheme is rejected at the trust boundary.
+ */
+const urlOrEmpty = z
+  .string()
+  .trim()
+  .refine((v) => {
+    if (v === '') return true;
+    try {
+      const { protocol } = new URL(v);
+      return protocol === 'http:' || protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }, 'Enter a valid http(s) URL.');
+
+/** An email string, or the empty string (a cleared contact field). */
+const emailOrEmpty = z
+  .string()
+  .trim()
+  .refine(
+    (v) => v === '' || z.string().email().safeParse(v).success,
+    'Must be a valid email.',
+  );
+
+const projectLinksSchema = z
+  .object({
+    repo: urlOrEmpty.optional(),
+    live: urlOrEmpty.optional(),
+    docs: urlOrEmpty.optional(),
+    extra: z
+      .array(
+        z.object({
+          label: z.string().trim().min(1),
+          url: urlOrEmpty,
+        }),
+      )
+      .optional(),
+  })
+  .default({});
+
+const projectGraphSchema = z
+  .object({
+    cluster: z.string().trim().optional(),
+    x: z.number().optional(),
+    y: z.number().optional(),
+    weight: z.number().optional(),
+  })
+  .default({});
+
+/**
+ * Editable project payload (create + update). `domain` is REQUIRED (a project
+ * always belongs to a cluster — unlike a post, which derives it). `slug` is
+ * validated on shape but the update service treats it as IMMUTABLE. `id` and
+ * `relatedPostSlugs` are accepted but IGNORED by the service (the latter is a
+ * server-derived cache owned by the post layer).
+ */
+export const projectDraftSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().trim().min(1, 'Title is required.').max(200),
+  slug: slugSchema,
+  domain: z.enum(DOMAINS),
+  summary: z.string().trim().min(1, 'Summary is required.'),
+  role: z.string().default(''),
+  stack: z.array(z.string().trim().min(1)).default([]),
+  heroText: z.string().default(''),
+  longDescription: z.string().default(''),
+  links: projectLinksSchema,
+  graph: projectGraphSchema,
+  order: z.number().int().default(0),
+  featured: z.boolean().default(false),
+  // Server-derived, read-only cache — accepted but ignored on write.
+  relatedPostSlugs: z.array(z.string()).default([]),
+});
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+/**
+ * Site-wide settings patch. Every field is `.optional()` so a PARTIAL patch is
+ * valid (the frontend may send all fields, or just the changed ones). URL/email
+ * fields accept the empty string (a cleared value).
+ */
+export const siteSettingsSchema = z.object({
+  siteName: z.string().trim().min(1).max(120).optional(),
+  siteDescription: z.string().trim().max(400).optional(),
+  githubUrl: urlOrEmpty.optional(),
+  contactEmail: emailOrEmpty.optional(),
+  defaultOgImage: urlOrEmpty.optional(),
+});
+
+/** The admin's own display name. */
+export const accountSchema = z.object({
+  displayName: z.string().trim().min(1).max(80),
+});
+
+/** Password-change payload. New password minimum length is enforced here AND in
+ *  the service (defense in depth). */
+export const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
