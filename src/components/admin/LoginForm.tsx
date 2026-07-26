@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from './Button';
 import { login, type ApiError } from './api';
 
@@ -14,7 +13,6 @@ const LOCKED_ERROR = 'Too many attempts. Please wait a moment and try again.';
  * `/admin`). Inputs disable while submitting.
  */
 export function LoginForm({ next = '/admin' }: { next?: string }) {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -27,9 +25,13 @@ export function LoginForm({ next = '/admin' }: { next?: string }) {
     setSubmitting(true);
     try {
       await login(email, password);
-      // Full navigation so the server re-reads the fresh session cookie.
-      router.replace(next);
-      router.refresh();
+      // Full-document navigation (not a soft router.replace): the browser makes
+      // a fresh request through middleware with the newly-set session cookie,
+      // bypassing the client Router Cache that still holds the pre-login
+      // "/admin -> /admin/login" redirect. `replace` keeps the login page out of
+      // history. Do NOT reset `submitting` here — the page is unloading and the
+      // button should stay in its "Signing in…" state until it does.
+      window.location.replace(next);
     } catch (err) {
       const status = (err as ApiError).status;
       setError(status === 429 ? LOCKED_ERROR : GENERIC_ERROR);
