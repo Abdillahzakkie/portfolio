@@ -232,3 +232,100 @@ pnpm test:e2e        # Playwright 20/20 (needs a prior pnpm build)
   - **TASK 2 — contrast verified + one in-slice fix.** Re-ran `@axe-core/playwright` (wcag2a/2aa/21a/21aa) on the 6 routes × BOTH themes. Confirmed the prior token edits hold: **LIGHT = 0 color-contrast on all 6 routes; DARK = 0 on `/`, `/blog`, `/projects/settleo`, `/blog/managerenta-reference-architecture`, `/about`, and (after my fix) `/about`.** Found + FIXED one in-slice miss the prior pass left: the About page "Email me" mailto pill hardcoded `color:#fff` on `var(--info)` (fails 1.99:1 in dark) → now `var(--text-on-accent)` (`src/app/(public)/about/page.tsx`).
   - **⚠️ ONE remaining dark contrast violation is OUTSIDE MY SLICE → HANDOFF for frontend-dev · ADMIN.** `/admin/login` (dark) still shows **1** color-contrast node: the submit button, from `src/components/admin/Button.tsx:21` `primary: 'bg-[var(--info)] text-white …'` — white on the light dark-mode `--info` #a5b4fc = **1.99:1**. Same class also on `danger: 'bg-[var(--danger)] text-white'` (dark `--danger` #fda4af is light too → likely also fails when a danger button renders in dark). **Fix (admin slice, one line each):** `text-white` → `text-[var(--text-on-accent)]` on the `primary` (and `danger`) variants — the `--text-on-accent` token already exists (#fff light / #0b0d12 dark) and Button-public/ProjectBacklink/About already consume it. I did NOT touch admin. So: **11/12 route-theme combos = 0 contrast; the 1 remaining is admin-owned.**
   - **Cleanup:** prod server on :3215 stopped, port freed; `.next` holds a REAL production build (BUILD_ID `bjU9Jrn43aiH4jK0ogkVf`); no `next dev`; all temp `__verify-*.mjs`/`__axe-detail.mjs` scripts removed from the repo (generator + screenshot live only in the scratchpad). DB left as-seeded (18/18).
+
+---
+# ✅ MILESTONE — Admin "Projects" + "Settings" sections (2026-07-27)
+
+**Status: all 12 acceptance criteria MET.** Delivered via the `team` skill (intake → gate →
+parallel builders → 7 read-only verifiers → fix routing → re-verify). `tsc --noEmit` 0 ·
+`eslint .` 0 warnings · `pnpm build` ✓ · **vitest 77/77**. Committed as **7 atomic commits**
+`cadd3d5..8d4713e` on `master` and pushed to `origin/master`; a `develop` branch was then
+created from that HEAD. This turns the two previously-"Soon" admin sidebar items into real
+sections. **Media was explicitly out of scope** (owner decision — deferred).
+
+## What was built
+- **Projects CRUD** — the `Project` model + read services already existed (graph home /
+  case-study). Added the admin write surface, mirroring the Posts slice 1:1:
+  - Service: `listProjectsForAdmin`, `getProjectForEditor`, `isProjectSlugAvailable`,
+    `createProject`, `updateProject` (**slug immutable after creation**), `deleteProject`
+    (**blocked with HTTP 409 `{code:'linked_posts',count}` when posts link it**).
+  - API: `POST /api/projects`, `GET|PATCH|DELETE /api/projects/[id]`, `GET /api/projects/slug-check`.
+  - UI (`src/app/admin/projects/**`, `src/components/admin/{ProjectTable,ProjectRowMenu,ProjectEditor}.tsx`):
+    list w/ domain filters + delete-blocked toast; full editor (immutable slug on edit, stack
+    tags, extra-links repeater, collapsible graph placement, featured switch, markdown preview).
+- **Settings — account + site** (`src/app/admin/settings/page.tsx`, `src/components/admin/SettingsForm.tsx`):
+  - **Account:** rename (`PATCH /api/settings/account` → re-issues the session so the JWT `name`
+    claim tracks) + **change password** (`POST /api/settings/password`, rate-limited, verifies the
+    current password, generic failure, never reveals which check failed; `changePassword` in `auth/password.ts`).
+  - **Site:** new `SiteSettings` **singleton** model (`src/server/models/SiteSettings.ts`,
+    `src/server/services/settings.ts`) holding siteName / siteDescription / githubUrl /
+    contactEmail / defaultOgImage. Read is **cached** (`unstable_cache` tag `site-settings` +
+    React `cache`) and **resilient** (returns hardcoded defaults on any DB error, so public RSC
+    never crashes). Writes `revalidateTag` + `revalidatePath('/', 'layout')`.
+  - **Public consumption:** root-layout `generateMetadata`, `Footer`, and `/about` now read
+    `getSiteSettings()` instead of hardcoded constants (fallback identical to the old defaults).
+    `NEXT_PUBLIC_SITE_URL` intentionally stays env (metadataBase needs it at build).
+
+## Acceptance criteria — all 12 MET (evidence)
+Verified LIVE by the tester (auth'd HTTP + direct DB reads + public HTML) and corroborated by the
+pentester: 1–4 projects list/create/edit/delete persist; 5 delete-blocked `409 count:1`; 6 sidebar
+Projects/Settings active (`aria-current`), not "Soon"; 7 public `/projects/[slug]` reflects edits;
+8–9 settings render + display-name persists (+ session re-issued); 10 password wrong→fail-no-change,
+correct→works & old rejected, stored as `$2` bcrypt; 11 site settings reflect on `/`+`/about`+footer+
+`<title>`/OG; 12 all 6 mutating endpoints 401 unauth (+ IDOR/mass-assignment/NoSQL rejected).
+
+## Verifiers (7, read-only, code + criteria only) & fixes applied
+- **PASS:** code-reviewer, tester, pentester, compliance-privacy, blue-hat*.
+- **FAIL→FIXED & re-verified:**
+  - **[perf HIGH]** the whole Mongoose lib (~573 kB) shipped to the browser on `/admin/projects/*`
+    (barrel import). Fixed by importing constants from `@/server/models/types`. Confirmed by build:
+    `/admin/projects/[id]` **358 kB → 215 kB** (== posts editor), list **257 → 114 kB**.
+  - **[a11y moderate]** RowMenu focus-restore + focus ring; immutable slug `readOnly`+described-by;
+    field errors wired to `aria-describedby`; `aria-required`; 24px tag-remove targets; password
+    error as `role="alert"`.
+  - **[security Med, blue-hat+pentester]** URL fields accepted `javascript:`/`data:` schemes (latent
+    stored-XSS — React 19 currently neutralizes `javascript:` hrefs, but it persists). Fixed with an
+    http(s) allowlist at the validation boundary.
+  - Backend polish: broadened settings revalidation, removed a redundant DELETE read, delete-message
+    grammar, `requireAdmin` now asserts `role==='admin'`, seed loads `.env.local`.
+
+## ⏳ LEFT / recommendations (non-blocking — owner/deploy decisions)
+1. **Rate-limit `X-Forwarded-For` spoofing (pentester Med):** the login/password throttle keys off a
+   client-controlled header → a rotating XFF bypasses it. Correct fix is deploy-topology-dependent
+   (trusted proxy hop) + a shared store (Redis/KV). Pre-existing helper; feature reused it.
+2. **`MarkdownPreview` eager-loads highlight.js (~100 kB)** behind a preview tab — pre-existing,
+   affects the Posts editor equally; a repo-wide dynamic-import follow-up.
+3. **`.next` AV/file-locking on this Windows box** intermittently breaks `next build`/`dev` and the
+   in-browser e2e (ChunkLoadError; the bundle fix should relieve it). SSR is clean; the settings e2e
+   passed 3/3. Run e2e in Docker/CI or exclude the repo `.next` from real-time AV scanning.
+4. **Home hero `<h1>`** still hardcodes the name (criterion 11 passes via footer+metadata) — wire to
+   `settings.siteName` if you want it settings-driven too. Low priority.
+5. **Media section** remains "Soon" (out of scope this pass, owner decision).
+
+## Housekeeping notes for the next agent
+- A pre-step's git operation **destroyed the uncommitted `LoginForm.tsx`** login-redirect change
+  mid-run; the orchestrator reconstructed it from the captured diff (verified safe — `next` is
+  sanitized by `safeNext`, no open-redirect) and committed it (`ea763fb`). Every builder brief
+  thereafter **forbade destructive git**.
+- `src/app/rss.xml/route.ts` + `src/app/sitemap.ts` gained `force-dynamic` + DB-outage fallbacks
+  (deploy resilience) — committed as `a6f5a6d`; they were unattributed in-tree at close, owner-confirmed
+  to keep.
+- Zero new dependencies (bcryptjs/jose/mongoose/zod reused); `pnpm audit --prod` clean.
+
+## Status log (append your entry when done)
+- (orchestrator · TEAM — Projects CRUD + Settings) Ran the full `team` pipeline on "build the Soon
+  sections". Gate decisions: build **Projects** + **Settings (account + site)**, **skip Media**;
+  project slug **immutable** after creation; deleting a project with linked posts **blocked (409)**.
+  Contract pre-steps: database-engineer wrote the `SiteSettings` singleton model; ui-ux-designer
+  wrote the field-layout spec (scratchpad). Builders (parallel, disjoint slices): backend-dev
+  (models/services/API/validation/revalidate/guard + `changePassword`), frontend-dev·ADMIN
+  (`src/app/admin/{projects,settings}/**` + `src/components/admin/{ProjectTable,ProjectRowMenu,ProjectEditor,SettingsForm,types,api,AdminSidebar}`),
+  frontend-dev·PUBLIC (`layout.tsx`+`Footer`+`about` read `getSiteSettings`), qa-engineer
+  (`tests/unit/{projects.crud,settings,validation.projects-settings}.test.ts` + `e2e/admin-{projects,settings}.spec.ts`,
+  isolated `portfolio_vitest_<pid>` db, teardown verified). 7 read-only verifiers dispatched with
+  ONLY code+criteria (no builder reasoning). All 12 acceptance criteria MET; two quality FAILs
+  (client-bundle Mongoose, a11y moderates) + one Med security (URL scheme) routed back to the owning
+  builders and re-verified. Final gates green (`tsc` 0, `eslint .` 0, `pnpm build` ✓, vitest 77/77;
+  bundle 358→215 kB). 7 atomic commits `cadd3d5..8d4713e` pushed to `origin/master`; `develop`
+  branch created from that HEAD. No orphaned processes (port 3200 free; 3000 is the owner's separate
+  `adverta` app, untouched).
