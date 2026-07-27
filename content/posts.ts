@@ -7,15 +7,21 @@ import type { PostSeedInput } from '@/server/models';
  * (which mirrors the registry in `docs/design/00-concept.md §3`). This is the
  * required post → project link (ACCEPTANCE #3).
  *
+ * Each `body` is a deep technical write-up grounded in the real repo — actual
+ * data structures, protocols, and short verbatim code — and is meant to
+ * COMPLEMENT (not duplicate) the project case-study in `./projects.ts`.
+ *
  * `status` policy (HANDOFF decision #2 + authoring rule):
  *   - `published` — neutral engineering write-ups of the owner's own products.
  *   - `draft`     — anything about CLIENT platforms (GKOI, Settleo) or SECURITY
- *                   detection internals (Sentova / Sentova MTD). The owner
- *                   publishes these manually.
+ *                   detection internals (Sentova / Sentova MTD). These stay
+ *                   architecture/decision level (no secrets, no exploitable
+ *                   specifics) and the owner publishes them manually.
  *
  * `readingTime` is intentionally omitted — the service computes it from `body`.
  * `publishedAt` is set only on published posts (drafts stay null by default).
- * Content is grounded in each repo's real docs; no invented benchmarks or dates.
+ * Content is grounded in each repo's real source; no invented benchmarks,
+ * versions, or dates.
  */
 export const posts: PostSeedInput[] = [
   // ─────────────────── Settleo (client / fintech → draft) ───────────────────
@@ -25,64 +31,86 @@ export const posts: PostSeedInput[] = [
     status: 'draft',
     projectSlug: 'settleo',
     excerpt:
-      'In Settleo, exactly one service is allowed to move money. Here is why that single-writer rule is the whole reason balances can be trusted.',
-    tags: ['go', 'tigerbeetle', 'grpc', 'ledger', 'fintech'],
+      'In Settleo, exactly one service is allowed to move money. Here is why that single-writer rule — over gRPC, on TigerBeetle, in u128 minor units — is the whole reason balances can be trusted.',
+    tags: ['typescript', 'tigerbeetle', 'grpc', 'ledger', 'fintech', 'double-entry'],
     seo: {
       metaTitle: 'Building a double-entry ledger on TigerBeetle — Settleo',
       metaDescription:
-        'Why Settleo makes one service the sole writer to a TigerBeetle double-entry ledger, and how every other service settles through it over gRPC.',
+        'Why Settleo makes one service the sole writer to a TigerBeetle double-entry ledger, with u128 integer money, two-phase holds, and a rebuild-from-log durability story.',
     },
-    body: `In Settleo, exactly one service is allowed to move money: the ledger. Every
-other service — the gateway, the indexer, the escrow orchestrator — describes an
-intent, but only the ledger records the debits and credits that make it real.
-That single-writer rule is the whole reason balances can be trusted.
+    body: `In Settleo, exactly one service is allowed to move money: \`settleo-ledger\`.
+Every other service — the gateway, the escrow orchestrator, the reorg-safe
+indexer — can *describe* an intent, but only the ledger records the debits and
+credits that make it real. It is the sole writer to TigerBeetle; everyone else
+reaches it over gRPC through a shared \`@settleo/ledger-client\`. That
+single-writer rule is the whole reason a balance can be trusted.
 
-## Why double-entry, and why TigerBeetle
+## Double-entry, on a database built for it
 
-Double-entry accounting is old, boring, and exactly the property you want when
-funds are involved: every transfer touches two accounts and the sum is always
-conserved. TigerBeetle is a database built specifically for that shape — accounts
-and transfers as first-class primitives — so the ledger service is the sole
-writer to it and speaks gRPC to everyone else.
-
-A transfer, then, is not an \`UPDATE\` against a balances table. It is a
-two-sided, all-or-nothing entry:
-
-\`\`\`go
-// A settlement is one atomic double-entry transfer.
-func (l *Ledger) Post(ctx context.Context, m Move) error {
-    t := tigerbeetle.Transfer{
-        DebitAccountID:  m.From,
-        CreditAccountID: m.To,
-        Amount:          m.Amount, // integer minor units, u128-safe
-        Ledger:          m.Asset,
-        Code:            CODE_SETTLEMENT,
-    }
-    return l.client.CreateTransfer(ctx, t) // conserved or rejected
-}
-\`\`\`
-
-> If more than one service can write to the ledger, you no longer have a
-> ledger — you have a race.
+Double-entry accounting is old and boring, which is exactly what you want near
+funds: every transfer debits one account and credits another by the same amount,
+so value is conserved by construction. TigerBeetle models accounts and transfers
+as first-class primitives, so the ledger leans on that instead of hand-rolling a
+balances table. Six invariants are pinned and property-tested with \`fast-check\`:
+double-entry always balances, available balance never goes negative, a transfer
+id applied twice equals applied once, a pending transfer posts *xor* voids
+exactly once, a hold auto-voids exactly at timeout, and linked transfers commit
+all-or-nothing.
 
 ## Money is never a float
 
-Amounts move as **integer minor units**, bounds-checked and u128-safe — there is
-no floating-point path anywhere near a balance. This is a threat-modelled control
-(precision loss and overflow are explicit line items), not a stylistic
-preference.
+Amounts are **u128 integer minor units** — larger than any native JavaScript
+number — so they cross the gRPC wire as a decimal **string**, are bounds-checked
+against \`U128_MAX\` at the adapter edge, and live as \`bigint\` internally. There
+is no floating-point path anywhere near a balance.
 
-## The indexer never writes balances
+## Idempotency across a type boundary
 
-The ledger does not talk to a chain directly. The indexer confirms on-chain
-events and *asks* the ledger to credit — reorg-safely — so a rolled-back block
-can never leave a phantom balance. Keeping the single writer behind gRPC keeps
-the trust boundary small enough that a reviewer can audit one service to answer
-the question that actually matters: can money be created or destroyed here?
+TigerBeetle wants a u128 id and rejects a zero, while the domain speaks string
+ids. The bridge is deterministic: SHA-256 the domain id and take the top 16 bytes
+as a big-endian u128, so the same string always maps to the same id and a retry
+is a no-op rather than a double-spend.
 
-Everything else in the platform is downstream of that discipline. The escrow
-orchestrator settles against the ledger, compliance reads from it, the console
-reports on it — but none of them writes.`,
+\`\`\`ts
+export function encodeId(id: string): bigint {
+  const digest = createHash('sha256').update(id).digest(); // 32 bytes
+  let value = 0n;
+  for (let i = 0; i < 16; i++) value = (value << 8n) | BigInt(digest[i]!);
+  return value === 0n ? 1n : value; // TigerBeetle rejects a zero id
+}
+\`\`\`
+
+## Holds and all-or-nothing batches
+
+Two-phase holds map onto TigerBeetle pending / post-pending / void-pending
+transfers, and the timeout is authoritative *in the database* — the client never
+drives expiry, so \`expirePending\` returns \`[]\` on purpose. A settlement that
+pays a buyer and a fee at once is a linked batch: every transfer but the last is
+flagged \`linked\`, so the group commits together or not at all.
+
+\`\`\`ts
+const tb = transfers.map((t, i) =>
+  this.toTBTransfer(t, i < transfers.length - 1 && transfers.length > 1));
+\`\`\`
+
+## The hard part: signing a gRPC body
+
+Every internal call is HMAC-signed over the request body, but proto3 elides
+default-valued fields on the wire — so a naive \`sign(bytes)\` breaks the moment a
+zero or empty field is dropped. The fix is a transport-neutral canonical form
+(recursively drop proto3 defaults, sort keys, JSON-encode) computed identically
+by signer and verifier, and the signed method is the fully-qualified RPC path so
+a signature can't be replayed onto a different call.
+
+## Durability, stated honestly
+
+TigerBeetle and the MongoDB read model cannot share a transaction. Rather than
+pretend otherwise, the projection is treated as derived and **rebuildable from
+the transfer log**, and a reconciliation pass cross-checks it against TigerBeetle
+field-by-field on an interval with a hard non-functional requirement of **drift =
+0**. The ledger is authoritative; the projection is a cache that can always be
+reconstructed — the only durability story that survives a crash between the two
+stores.`,
   },
 
   // ─────────────────── NFTMixer (Go) — neutral → published ───────────────────
@@ -93,12 +121,12 @@ reports on it — but none of them writes.`,
     publishedAt: '2026-07-10T09:00:00.000Z',
     projectSlug: 'nftmixer-go',
     excerpt:
-      'Porting a stateful Blazor Server app to Go + Next.js meant confronting an uncomfortable truth: most of the rewrite was not Go at all.',
+      'Porting a stateful Blazor Server app to Go + Next.js meant confronting an uncomfortable truth: most of the rewrite was not Go at all — and the interesting parts were the bugs we refused to carry over.',
     tags: ['go', 'dotnet', 'nextjs', 'rewrite', 'siwe'],
     seo: {
       metaTitle: 'Rewriting a .NET Blazor app in Go without losing parity',
       metaDescription:
-        'What survived the port from C#/.NET 6 Blazor Server to Go + Next.js, what deliberately did not, and why 70% of a "Go rewrite" was frontend work.',
+        'What survived the port from C#/.NET 6 Blazor Server to Go + Next.js, why 70% of a "Go rewrite" was frontend, and the deliberate parity breaks that fixed the original.',
     },
     body: `"Rewrite it in Go" is a satisfying sentence. It is also, in this case, mostly a
 lie — and noticing that early is what made the rewrite tractable.
@@ -106,48 +134,82 @@ lie — and noticing that early is what made the rewrite tractable.
 ## Blazor Server *is* the UI
 
 The original NFTMixer is a C#/.NET 6 Blazor Server app. Its \`.razor\` files are
-not templates — Blazor Server is a stateful framework that renders on the server
-and pushes DOM diffs to the browser over a websocket. Go has no equivalent. So
-while the generation engine, compositing, database access, S3, and wallet auth
-all port to Go cleanly, roughly **70% of the work was frontend**, rebuilt from
-scratch in Next.js. Budgeting for that up front is the difference between a plan
-and a surprise.
+not templates: Blazor Server renders on the server and pushes DOM diffs to the
+browser over a SignalR websocket. Go has no equivalent. So while the generation
+engine, layer compositing, database access, S3, and wallet auth all port to Go
+cleanly, roughly **70% of the work was frontend**, rebuilt from scratch in a
+Next.js 16 App Router app. The design doc says it plainly — "none of it is Go" —
+and budgeting for that up front is the difference between a plan and a surprise.
+
+## Authentication that actually authenticates
+
+The original's "auth" believed whatever wallet address the browser named — no
+signature challenge, anywhere. The Go app implements real **SIWE** (EIP-4361):
+the server issues a nonce, composes the full message, the client signs it
+verbatim, and the server *recovers* the signing address. Crucially it does **not**
+pull in go-ethereum for that — its library code is LGPL-3.0, and static-linking it
+into a proprietary binary carries a relink/source obligation. Recovery needs only
+secp256k1 and keccak256, both permissively licensed, so the whole auth decision is
+a few lines:
+
+\`\`\`go
+v := sig[64]                          // Ethereum [R||S||V]; dcrd wants [V||R||S]
+if isHighS(sig[32:64]) { return "", errMalleable } // reject malleable high-S
+compact := make([]byte, signatureLen)
+compact[0] = v
+copy(compact[1:], sig[:64])
+pub, _, err := ecdsa.RecoverCompact(compact, EIP191Hash(message))
+\`\`\`
+
+Ownership now comes from the session, folded into the store's query *filter*, so
+a handler that forgets to check simply selects no document and returns
+\`ErrNotFound\` — there is no unfiltered read to leak by mistake. Sessions expire
+via a Mongo TTL index instead of living forever in an in-memory map whose cleanup
+method was empty.
 
 ## Parity means behaviour, not files
 
-Full parity does not mean porting every file. Several things were deliberately
-left behind because they were dead or dangerous:
+Several things were deliberately left behind because they were dead or dangerous:
+an unauthenticated full-database-dump endpoint, IPFS publishing that returned
+before it uploaded, and whole generations of superseded components that were
+referenced but unreachable. Porting those would have been faithfully reproducing
+debt.
 
-- an unauthenticated full-database-dump endpoint,
-- unfinished IPFS publishing that never actually uploaded,
-- entire generations of superseded components that were referenced but
-  unreachable.
+## Deliberate parity *breaks* that are fixes
 
-Porting those would have been faithfully reproducing debt.
+A rewrite is a chance to be correct where the original was wrong:
 
-## Fixing the things that were simply broken
+- **One generator, not two.** C# had a weighted-but-duplicating path and a
+  unique-but-uniform path with an unbounded \`while\` that hung. Go collapses them
+  into weighted selection plus a uniqueness check with a **bounded** retry that
+  fails with an actionable exhaustion error instead of spinning forever.
+- **MIN, not product, rarity.** The absolute rarity of a combination is the
+  minimum of its step rarities — the rarest step gates it — and the cycle guard
+  \`continue\`s past a revisited node instead of the C# \`goto\` that dropped whole
+  parallel branches.
+- **Resize every layer** to the output dimensions with a CatmullRom kernel, so
+  non-uniform art composites without the misalignment the C# base-layer-only
+  resize produced, and emit **OpenSea-standard metadata** with the image URI as a
+  parameter so an IPFS CID can be substituted without re-rendering.
 
-The most interesting part of a rewrite is the bugs you refuse to carry over.
-The original's "authentication" believed whatever wallet the browser claimed —
-no signature, anywhere:
-
-\`\`\`text
-Old flow:  browser says "I am 0xADMIN…"  →  server believes it.
-New flow:  server issues nonce  →  wallet signs  →  server RECOVERS the address
-           from the signature (go-ethereum).  Same effort, actually secure.
+\`\`\`go
+for produced < want {
+  chosen := selectNFT(...)
+  key := strings.Join(chosen, ",")
+  if seen[key] {
+    fails++
+    if fails >= MaxSelectionRetries {
+      return GenerateResult{}, &ExhaustionError{Requested: int64(qty), Available: avail}
+    }
+    continue
+  }
+}
 \`\`\`
 
-Alongside real **SIWE**, ownership is now derived from the session rather than a
-URL parameter, and sessions expire via a Mongo TTL index instead of living
-forever in an in-memory map.
-
-## Deliberate parity *breaks*
-
-A rewrite is also a chance to be correct where the original was wrong: metadata
-now follows the OpenSea standard instead of a flat dictionary, and every layer
-is resized to the output dimensions so non-uniform art composites without
-misalignment. Those are intentional divergences — parity with the *intent*, not
-the mistake.`,
+Rendering is byte-different from C# by design (different resampling and PNG
+encoders), so tests assert on structure and perception, never image hashes —
+while the metadata JSON must match exactly. Parity with the *intent*, not the
+mistake.`,
   },
 
   // ─────────────────── GKOI Platform (client → draft) ───────────────────
@@ -157,33 +219,69 @@ the mistake.`,
     status: 'draft',
     projectSlug: 'gkoi-platform',
     excerpt:
-      'Why GKOI splits its whitelist into a dedicated service, and how Merkle proofs keep an allowlist cheap on-chain.',
+      'Why GKOI carves its allowlist into its own service, and how keccak256(address) Merkle leaves keep it cheap on-chain while snapshot caching keeps every served proof consistent with the served root.',
     tags: ['web3', 'merkle', 'nft', 'nodejs', 'ipfs'],
     seo: {
       metaTitle: 'A Merkle-proof whitelist that scales apart from the mint',
       metaDescription:
-        'How the GKOI platform isolates whitelisting into its own service, using Merkle proofs and IPFS-pinned metadata.',
+        'How gkoi-whitelist builds a keccak256(address) Merkle tree with merkletreejs sortPairs, puts only a 32-byte root on-chain, and serves consistent proofs via snapshot caching and explicit invalidation.',
     },
-    body: `A mint is a stampede. The worst place to discover a bottleneck is in the one
-request path that also decides who is allowed to pay you. GKOI keeps its
-allowlist logic in a service of its own — \`gkoi-whitelist\` — precisely so it
-can scale, fail, and be audited independently of the core API.
+    body: `A mint is a stampede, and the worst place to discover a bottleneck is the one
+request path that also decides who is allowed to pay you. GKOI carves its
+allowlist out into a service of its own — \`gkoi-whitelist\` — so it can scale,
+fail, and be audited independently of the core API.
 
-## Why Merkle proofs
+## Why Merkle, and what actually goes on-chain
 
 Storing thousands of allowlisted addresses on-chain is expensive. A Merkle tree
-collapses the whole set into a single root the contract stores, while each user
-carries only the small proof that their address is a leaf. The contract verifies
-the proof at mint time; the off-chain service's job is to build the tree, serve
-each address its proof, and pin the associated contract metadata to IPFS.
+collapses the whole set into a single 32-byte **root** the contract stores, while
+each user carries only the O(log n) **proof** that their address is a leaf. The
+leaf is a single \`keccak256(address)\`, and the tree is built with \`merkletreejs\`
+under \`sortPairs: true\` so pair-hashing is order-independent and the contract's
+\`MerkleProof.verify\` matches byte-for-byte:
 
-## Small, separately-auditable boundaries
+\`\`\`ts
+const hashedAddresses = addresses.map((addr) => ethers.keccak256(addr));
+const root = new MerkleTree(hashedAddresses, ethers.keccak256, {
+  sortPairs: true,
+}).getRoot();
+return \`0x\${root.toString("hex")}\`;
+\`\`\`
 
-Authentication (\`gkoi-authentications\`, which ships with its own security and
-audit docs) and whitelisting live apart from \`gkoi-server\`. Splitting the
-mint-critical trust boundaries into their own services keeps each one small
-enough to reason about — and lets the whitelist's proof-serving scale under drop
-load without dragging the rest of the platform with it.`,
+Only that root lives on-chain. An operator sets it on the mint contract; the
+service serves each user their proof over REST (\`/root\`, \`/proof/:address\`,
+\`/is-whitelisted/:address\`) and the *contract* does the actual verification at
+mint. That is the "scales apart from the mint" property: allowlist size doesn't
+inflate gas or contract storage at all.
+
+## Cache the snapshot, not the tree
+
+The O(n) keccak work still has to stay off the request hot path. The trick is to
+cache the **sorted address snapshot** — the exact input the Merkle helpers hash —
+rather than a serialized tree:
+
+\`\`\`ts
+// The snapshot is the exact list the merkle helpers hash, so caching it
+// (rather than the whole tree) keeps the keccak256 + MerkleTree(sortPairs:true)
+// config — and therefore every emitted proof — byte-identical to a cold rebuild.
+\`\`\`
+
+Root and snapshot share one logical version and are invalidated together on every
+add/remove, so a served \`/proof\` is *always* consistent with the served \`/root\`.
+A short TTL is a safety net behind that explicit invalidation, not the primary
+correctness mechanism. Contract metadata (images plus JSON) is pinned to IPFS and
+referenced as \`ipfs://\`, with the resulting URI cached behind a 24-hour TTL and
+only successful pins memoized.
+
+## Small, separately-auditable trust boundaries
+
+Whitelisting and authentication are the mint-critical surfaces, so they live in
+their own services — \`gkoi-whitelist\` and \`gkoi-authentications\`, the latter the
+single source of truth for admin roles — apart from the large \`gkoi-server\`
+surface. Each is small enough to reason about, ships its own security and audit
+docs, enforces its own scoped HMAC service-to-service contract, and limits blast
+radius. There is no shared database and no ambient admin key: cross-service reads
+are scoped, signed calls.`,
   },
 
   // ─────────────────── GKOI Contracts (client → draft) ───────────────────
@@ -193,34 +291,76 @@ load without dragging the rest of the platform with it.`,
     status: 'draft',
     projectSlug: 'gkoi-contracts',
     excerpt:
-      'ERC721-AC enforces transfer and royalty policy at the token level. Here is why the GKOI collections are built on it.',
-    tags: ['solidity', 'foundry', 'erc721', 'royalties', 'nft'],
+      'ERC721-AC declares a royalty rate with ERC-2981 and delegates enforcement to an external, owner-swappable transfer validator — policy that lives in a hook and travels with the token.',
+    tags: ['solidity', 'foundry', 'erc721', 'royalties', 'seadrop', 'nft'],
     seo: {
       metaTitle: 'Royalties that survive the secondary market: ERC721-AC',
       metaDescription:
-        'Why the GKOI collections use LimitBreak ERC721-AC (Creator) for enforceable royalties, deployed from a factory and built with Foundry + Hardhat.',
+        'How the GKOI collection exposes the Creator Token interface and calls an external, swappable ITransferValidator721 in _beforeTokenTransfers, with ERC-2981 rates and soulbound-by-default transfers.',
     },
     body: `Marketplace-honoured royalties are a promise, not a mechanism — and promises
-break the moment a venue decides to compete on fees. The GKOI collections are
-built on **ERC721-AC** (LimitBreak's Creator standard) so that transfer and
-royalty policy is enforced *at the token level*, not left to a marketplace's good
-behaviour.
+break the moment a venue decides to compete on fees. The GKOI collection
+(\`gkoi-erc721AC\`) takes a more honest position: it is a SeaDrop-based ERC721A
+token that declares its royalty *rate* on-chain and delegates *enforcement* to a
+policy contract that travels with the token.
 
-## The design
+## Rate versus enforcement
 
-- **\`gkoi-erc721AC\`** — the creator collection: ERC721-AC, upgradeable, and
-  built/tested with both Foundry and Hardhat.
-- **\`NftCollectionFactory\`** — deploys new collections from a template, so a
-  new drop is a factory call rather than a fresh deploy-and-pray.
-- **\`Conduit\`** — the shared routing/approvals plumbing.
+Two different things get smudged together as "royalties":
 
-## Why enforce at the token
+- **The rate** is an ERC-2981 declaration — \`royaltyInfo(tokenId, salePrice)\`
+  returns \`salePrice * royaltyBps / 10_000\`, and the setter reverts if
+  \`royaltyBps > 10_000\`. Marketplaces read this and may honour it.
+- **The enforcement** is a separate question: did a transfer actually route
+  through a sale that paid it? That answer lives in an external,
+  owner-configurable transfer validator, called on every non-mint/non-burn
+  transfer.
 
-If the policy lives in the token, it travels with the token. A secondary sale
-that would sidestep the creator's royalty simply does not satisfy the transfer
-policy. That is the entire reason to reach for a creator standard instead of
-plain ERC-721: the royalty is a property of the asset, not a courtesy of whoever
-happens to be reselling it.`,
+The token exposes the **Creator Token** interface (\`ICreatorToken\`) and, in
+\`_beforeTokenTransfers\`, calls out to whatever validator the owner has pointed it
+at:
+
+\`\`\`solidity
+function _beforeTokenTransfers(address from, address to, uint256 startTokenId, uint256) internal virtual override {
+    if (from != address(0) && to != address(0)) {
+        address v = _transferValidator;
+        if (v != address(0)) {
+            ITransferValidator721(v).validateTransfer(msg.sender, from, to, startTokenId);
+        }
+    }
+}
+\`\`\`
+
+That is the whole design: the token stays standard, but every secondary-market
+transfer is gated by a policy contract the creator *chooses* and can swap.
+Address \`0\` means no validator and no enforcement; a royalty-enforcing validator
+survives the secondary market without hard-coding one vendor's policy into the
+collection. The honest framing isn't "royalties are guaranteed on-chain" — it's
+"policy lives in a hook that *can* enforce, and it travels with the token."
+
+## Extra durability levers
+
+Transfers and approvals are **paused (soulbound) by default** — \`transfersPaused\`
+starts \`true\`, and holder-initiated transfers revert until the owner calls
+\`updateTransfersPaused(false)\`. Conduit pre-approval keeps mint→list
+approval-free without weakening the validator gate, though the Conduit's own
+NatSpec warns honestly that a malicious channel owner could drain approvals — a
+real trust caveat, not hidden.
+
+## Three ways onto the allowlist
+
+It's worth contrasting the eligibility mechanisms. SeaDrop verifies an on-chain
+Merkle proof whose leaf is \`keccak256(abi.encode(minter, mintParams))\` — the
+proof carries per-minter mint parameters:
+
+\`\`\`solidity
+MerkleProof.verify(proof, _allowListMerkleRoots[nftContract], keccak256(abi.encode(minter, mintParams)))
+\`\`\`
+
+The separate \`GKoiPresale\` path instead uses **ECDSA role-signed claims** —
+\`_recoverAddress\` recovers a signer and requires it to hold \`VALIDATOR_ROLE\`. And
+both are distinct again from the whitelist *service's* plain \`keccak256(address)\`
+tree: three "is this address allowed" mechanisms, each chosen for its context.`,
   },
 
   // ─────────────────── Settleo Escrow (client → draft) ───────────────────
@@ -230,43 +370,74 @@ happens to be reselling it.`,
     status: 'draft',
     projectSlug: 'settleo-escrow',
     excerpt:
-      'In Settleo, releasing an escrow takes two of three signatures — buyer, seller, platform — so no single party can move the funds alone.',
-    tags: ['solidity', 'escrow', 'web3', 'non-custodial', 'p2p'],
+      'Settleo escrows release only on on-chain 2-of-3 approval voting by the parties themselves, or a permissionless time-locked auto-refund — the operator holds no vote at all.',
+    tags: ['solidity', 'foundry', 'escrow', 'web3', 'non-custodial'],
     seo: {
       metaTitle: 'A 2-of-3 non-custodial escrow (the platform is not enough)',
       metaDescription:
-        'How Settleo escrows funds with a 2-of-3 signature scheme so a compromised platform cannot drain a trade, and how the orchestrator settles through the ledger.',
+        "How Settleo's SettleoEscrow moves funds only on on-chain 2-of-3 approval voting by msg.sender or a permissionless auto-refund, with CEI/reentrancy guards and a fuzz-proven solvency invariant.",
     },
     body: `The strongest thing you can say about an escrow is what it *cannot* do. Settleo's
-escrow cannot be drained by any single party — not the buyer, not the seller, and
-importantly, not the platform.
+\`SettleoEscrow\` cannot be moved by any single party — not the buyer, not the
+seller, and pointedly not the platform that operates it.
 
-## Two of three
+## It's a vote, not a signature scheme
 
-Funds sit behind a **2-of-3** signature scheme across the buyer, the seller, and
-the platform. Releasing requires agreement between any two of them, so:
+The mechanism is often mis-described as a multisig or a threshold signature. It
+is neither. There is no \`ecrecover\`, no EIP-712 typed data, and no on-chain nonce
+scheme in the contract. Instead, each of three designated addresses — \`buyer\`,
+\`seller\`, \`arbiter\` — calls \`approve\` itself, and the contract records that
+\`msg.sender\`'s vote. When two distinct parties vote for the same outcome, the same
+call settles:
 
-- a dishonest counterparty can't unilaterally take the funds,
-- and a compromised *platform* isn't sufficient to move them either.
+\`\`\`solidity
+function approve(bytes32 tradeId, Outcome outcome) external nonReentrant {
+    Escrow storage e = _escrows[tradeId];
+    if (e.state != State.Funded && e.state != State.Disputed) revert WrongState();
+    if (msg.sender != e.buyer && msg.sender != e.seller && msg.sender != e.arbiter) revert NotSigner();
+    if (_votes[tradeId][msg.sender] == outcome) revert AlreadyVoted();
+    _votes[tradeId][msg.sender] = outcome;
+    if (_tally(tradeId, e, outcome) >= 2) { _settle(tradeId, e, outcome); }
+}
+\`\`\`
 
-Custodial escrow makes the operator a single point of theft. A 2-of-3 design
-removes that by construction — the operator is one key among three, never a
-master key.
+The tally is O(1) over the three designated slots, so one signer voting
+repeatedly can never reach the threshold alone. The operator holds an
+\`OPERATOR_ROLE\` that may \`open\` an escrow and trigger a refund, but it holds **no
+vote** — a fact pinned by the test \`test_approve_operatorHasNoVote\`. The platform
+is structurally incapable of deciding an outcome. (Off-chain, the orchestrator
+signs EIP-1559 transactions only to *submit* those on-chain \`approve\` calls; it
+never holds a party key.)
 
-## The orchestrator drives, the ledger records
+## Two ways for funds to move — and only two
 
-On-chain, \`settleo-escrow-contracts\` (Foundry/Solidity) hold the funds. Off
-chain, \`settleo-escrow-orchestrator\` translates the trade lifecycle — fund,
-release, refund, dispute — into escrow actions. When an outcome is final, it asks
-\`settleo-ledger\` to record the settlement. It never writes balances itself;
-that stays the ledger's sole job.
+Money leaves the contract by exactly one of two paths: a 2-of-3 approval
+(cooperatively buyer + seller, or on a dispute arbiter + one party), or a
+**permissionless, time-locked auto-refund** to the seller after \`refundDeadline\`.
+Because the refund is permissionless, an absent or malicious operator can never
+strand funds — anyone can trigger it once the clock runs out. Raising a dispute
+*freezes* that clock: a \`Disputed\` escrow is rejected by the auto-refund path and
+can only be resolved by a 2-of-3 vote.
 
-## When it goes wrong
+## Safety scaffolding
 
-Disputes hand off to \`settleo-dispute\`, which resolves with the same 2-of-3
-discipline: arbitration, evidence bundling, and SLA timers. The escrow's safety
-property holds all the way through the unhappy path, which is the only path that
-actually matters when trust breaks down.`,
+The value transfer is Checks-Effects-Interactions plus \`nonReentrant\`: state is
+terminalized and \`_locked\` decremented *before* any payout, native value is sent
+by low-level \`call\` and reverts the whole settlement on failure, and \`receive()\`
+rejects stray ETH. \`pause\` gates only new intake (\`open\`/\`fund\`), so locked funds
+can always exit. Assets are deny-by-default — escrowable only up to a
+governor-set cap. Fuzz and invariant tests prove the solvency property that, for
+every asset, the contract balance is always at least \`lockedOf(asset)\`.
+
+## The platform is not enough
+
+The escrow secures the crypto leg on-chain; final settlement is *mirrored* into
+Settleo's off-chain double-entry ledger. The orchestrator opens a two-phase hold
+(seller → escrow) on fund, and on release commits it as one all-or-nothing linked
+batch — escrow → buyer (net) plus escrow → fee — tagged with the trade. It never
+writes balances itself, and deterministic ledger ids make every command
+idempotent under retry. One honest caveat worth stating: the contract is
+currently **unaudited**, with mainnet gated behind an external audit.`,
   },
 
   // ─────────────────── NFTMixer (.NET) — neutral → published ───────────────────
@@ -277,41 +448,69 @@ actually matters when trust breaks down.`,
     publishedAt: '2026-07-08T09:00:00.000Z',
     projectSlug: 'nftmixer-net',
     excerpt:
-      'A short retrospective on the original C#/.NET 6 Blazor Server generative-NFT builder — what it got right, and the defects that justified a rewrite.',
+      'A retrospective on the original C#/.NET 6 Blazor Server generative-NFT builder — a real, feature-rich product whose four honest defects justified a ground-up rewrite.',
     tags: ['dotnet', 'blazor', 'csharp', 'retrospective'],
     seo: {
       metaTitle: 'The Blazor app that came first (and why we left it)',
       metaDescription:
-        'A retrospective on NFTMixer (.NET) — the C#/.NET 6 Blazor Server generative-NFT builder that defined the product and motivated the Go rewrite.',
+        'A retrospective on NFTMixer (.NET) — the C#/.NET 6 Blazor Server generative-NFT builder that defined the product, and the defects (spoofable auth, an open DB dump, a committed key, non-expiring sessions) that motivated the Go rewrite.',
     },
     body: `Before there was a Go rewrite, there was a working product. NFTMixer (.NET) is
-the original generative-NFT builder — C#/.NET 6, Blazor Server, a multi-project
-Dockerized solution — and it is worth keeping in the story precisely because the
-rewrite only makes sense against it.
+the original generative-NFT builder — C#/.NET 6, Blazor Server, a three-project
+Dockerized solution — and it earns its place in the story because the rewrite
+only makes sense against it.
 
-## What it got right
+## It was a real product, not a toy
 
-It nailed the domain model: layered art flows through sources → assets →
-variants → a node graph, then generates PNGs plus metadata. That pipeline was
-sound enough that the rewrite kept it wholesale. The product worked; people used
-it.
+The domain model was sound and complete: layered art flows through sources →
+assets → variants → traits → rarities → a node graph, then generates PNGs plus
+metadata and SHA-256 sidecars. It carried roughly forty EF Core migrations
+spanning 2022 to 2026, a masters system, and rarity tiers, with a live V3
+generation UI. People used it, and the rewrite kept the model wholesale.
 
-## Where it fell short
+## Blazor Server was the fork in the road
 
-The interesting engineering lesson is in the defects, catalogued honestly rather
-than swept aside:
+Blazor Server renders \`.razor\` components on the server and diffs them to the
+browser over a SignalR websocket. That handed the app things like progress
+dialogs "for free" — but it is precisely the piece with no Go equivalent, which
+is why the migration ended up ~70% frontend. You cannot port a stateful,
+server-rendered UI framework; you rebuild the interface.
 
-- **"Authentication" that didn't authenticate** — the server trusted whatever
-  wallet the browser named.
-- **An unauthenticated database-dump endpoint.**
+## The defects that justified leaving
+
+The interesting engineering lesson is in the defects, catalogued honestly:
+
+- **"Authentication" that didn't authenticate.** The browser reported the
+  connected wallet and the server simply believed it — no signature, anywhere.
+
+\`\`\`csharp
+SelectedAccount = await _ethereumHostProvider.GetProviderSelectedAccountAsync();
+if (SelectedAccount != null) {
+    await InitUserData(SelectedAccount);   // server trusts the address as-is
+}
+\`\`\`
+
+- **An unauthenticated database-dump endpoint** — \`GET /api/Download/export/db\`
+  shelled out to \`pg_dump\` and returned the whole dataset with no \`[Authorize]\`.
 - **A live API key committed to the repository.**
-- **Sessions that never expired**, held in an in-memory map with an empty
-  cleanup method.
+- **Sessions that never expired**, held in a process-local dictionary whose
+  cleanup method was literally empty:
 
-None of those are exotic; they're the ordinary erosion that accumulates in a
-shipping app. Naming them is what turned "rewrite for the language" into "rewrite
-for correctness." The successor, \`nftmixer-go\`, exists to keep the model and
-drop the debt.`,
+\`\`\`csharp
+public static void RegisterToken(string token, Web3User user) {
+    _activeTokens.TryAdd(token, (DateTime.UtcNow, user));
+    Cleanse();
+}
+static void Cleanse() {
+}
+\`\`\`
+
+There was also a two-generators problem — a "Process Paths" button and a "Process
+Paths (Accurate)" button that produced *different* collections, the accurate one
+with an unbounded loop that could hang. None of this is exotic; it's the ordinary
+erosion that accumulates in a shipping app. Naming it is what turned "rewrite for
+the language" into "rewrite for correctness." Its successor, \`nftmixer-go\`,
+exists to keep the model and drop the debt.`,
   },
 
   // ─────────────────── GKOI Apps (client → draft) ───────────────────
@@ -321,34 +520,62 @@ drop the debt.`,
     status: 'draft',
     projectSlug: 'gkoi-apps',
     excerpt:
-      'The GKOI admin, public site, and gallery all consume the same platform and contracts. The hard part is making on-chain ops safe to click.',
-    tags: ['nextjs', 'react', 'web3', 'admin', 'ux'],
+      'The GKOI admin makes chain operations legible by not making the operator sign raw transactions — labeled buttons POST to an authenticated backend while wagmi reads on-chain state as plain UI.',
+    tags: ['nextjs', 'react', 'web3', 'wagmi', 'admin'],
     seo: {
       metaTitle: 'Turning chain operations into an admin a human can drive',
       metaDescription:
-        'How the GKOI Next.js frontends — admin, public site, and gallery — turn platform state and on-chain operations into something operators and collectors can use.',
+        'How the GKOI admin turns on-chain operations into backend-mediated REST calls with a toast lifecycle, reads contract state via wagmi useReadContracts, and keeps authority server-side behind cookie auth.',
     },
     body: `Three Next.js apps sit in front of the GKOI platform: an admin dashboard
-(\`gkoi-admin-v2\`), the public mint site (\`gkoi-client-v3\`), and a gallery /
-marketplace (\`gkoi-gallery\`). They share a backend contract, but they answer to
-very different users.
+(\`gkoi-admin-v2\`), the public mint site (\`gkoi-client-v3\`), and a gallery
+(\`gkoi-gallery\`). They're all Next.js 16 + React 19 on a Privy + wagmi + viem
+wallet stack, and they hold **no source of truth** — the server and the contracts
+are authoritative, and the frontends are projections that fetch typed
+\`IResponseData<T>\` envelopes and submit back.
 
-## The admin's real job
+## Make chain ops legible by not signing raw transactions
 
-Collections, contests, users, and *on-chain operations* all funnel through the
-admin. The engineering challenge there isn't rendering a table — it's making a
-chain operation legible and reversible-feeling to a non-technical operator.
-Irreversible actions need to look irreversible; whitelist and contest state need
-to read at a glance.
+The admin's core move is counter-intuitive: for almost every privileged task, the
+operator does **not** sign a wallet transaction. Instead, the action is a labeled
+button that POSTs to a backend the operator is already authenticated to, and the
+chain / indexing work happens server-side. The UX is a toast lifecycle that
+surfaces the server's own message verbatim:
 
-## Consuming, not duplicating
+\`\`\`ts
+const toastId = toast.loading("Adding new collection...");
+const url = \`\${env.MAIN_SERVICE_URL}/api/collections/add/\${tokenAddressOrSlug}?chainId=\${chainId}\`;
+const { status, data: { data } } = await api().post(url, null);
+if (status !== 201 || !data) throw new Error();
+toast.update(toastId, { render: "Successfully added new collection!", type: "success", isLoading: false });
+\`\`\`
 
-These apps deliberately hold no source of truth. They consume the platform
-services and the contracts, so the front-of-house work is translation: turning
-whitelist proofs, mint windows, and contest results into UI, and turning an
-operator's click back into a well-formed platform call. Keeping the frontends
-thin is what lets the mint-critical logic stay concentrated — and audited — in
-the services underneath.`,
+On-chain *state*, meanwhile, is read-only UI: wagmi \`useReadContracts\` pulls
+\`owner\`, \`stage\`, and \`stagePrices\` off the presale contract, and the hook maps
+the raw stage enum to a human name and a formatted price. No transaction is
+required to *look*.
+
+\`\`\`ts
+const { data } = useReadContracts({
+  allowFailure: true,
+  contracts: [ { ...presaleContract, functionName: "owner" },
+               { ...presaleContract, functionName: "stage" } ],
+});
+\`\`\`
+
+There is exactly **one** genuine direct chain write in the admin — the swap token
+redeem/claim, via \`useWriteContract\` — and it's the deliberate exception that
+proves the rule.
+
+## Safety rails
+
+Auth is cookie-based: the REST client is \`axios.create({ withCredentials: true })\`
+so the session never sits in JS-readable storage, and the server re-authorizes
+every mutation. The gate is Privy (SIWE-style) → HttpOnly session cookie →
+admin-role/permission verify, with the role fetched from \`gkoi-authentications\` —
+the frontend never decides authorization itself. Playwright e2e drives the
+operator routes. The through-line: keep the frontends thin so the mint-critical
+logic stays concentrated, server-side, and audited.`,
   },
 
   // ─────────────────── Sentova (security internals → draft) ───────────────────
@@ -358,47 +585,82 @@ the services underneath.`,
     status: 'draft',
     projectSlug: 'sentova',
     excerpt:
-      'Sentova will kill and quarantine processes on a machine. That is exactly why every enforcement directive has to be verified before it runs.',
+      'Sentova can kill and quarantine processes, so every enforcement directive is Ed25519-verified before it runs — signature before expiry, at most once, and honestly gated on elevation.',
     tags: ['go', 'security', 'windows', 'wfp', 'edr'],
     seo: {
       metaTitle: 'A signed directive path for an endpoint agent — Sentova',
       metaDescription:
-        'How Sentova verifies enforcement directives before driving kill/quarantine/network-filter actions, with a replay guard and elevation-gated live execution.',
+        'How Sentova verifies enforcement directives (signature before expiry, six-step order) over an authenticated named pipe, drives kill/quarantine/network-filter through one enforcer, and gates the live privileged primitives on elevation.',
     },
-    body: `An agent that can terminate processes and filter traffic is a loaded weapon
-pointed at the machine it protects. Sentova's design treats the *directive path*
-— how an enforcement decision reaches the privileged code that acts on it — as
-the most safety-critical thing in the product.
+    body: `An agent that can terminate processes and filter network traffic is a loaded
+weapon pointed at the machine it protects. Sentova treats the *directive path* —
+how an enforcement decision reaches the privileged code that acts on it — as the
+most safety-critical thing in the product, and hardens it end to end.
 
-## Verify, then enforce
+## Privilege separation first
 
-Enforcement flows through a shared enforcer that only acts on **verified**
-directives, driving them through the real kill / quarantine / network-filter
-ports. Two safety properties ride along:
+The desktop agent is two processes. A Wails UI holds **no privilege** and is only
+an IPC client. A Windows service runs as SYSTEM, exposes **no network listener**,
+and is the only thing that can kill or quarantine. They talk over an authenticated
+named pipe, and a request has to survive several fail-closed gates before anything
+happens.
 
-- a **bounded, at-most-once replay guard**, so a re-delivered directive cannot
-  fire twice, and
-- an autonomous **canary → correlate → kill/quarantine** loop that can act on its
-  own detections rather than waiting to be told.
+## Authorize, verify, enforce — in that order
 
-This decision logic and the enforcement wiring are Go, and they're unit-tested
-against *fake* ports so the tests run anywhere.
+1. **Peer authentication.** The connecting peer's token SID must equal the
+   enrolling user's SID, resolved once at accept-time by impersonation to dodge a
+   per-request PID-reuse TOCTOU. A read failure is itself a rejection.
+2. **Integrity gate.** Mutating ops (\`enforce_directive\`, \`quarantine\`,
+   \`unenroll\`, …) require at least medium integrity; a low-IL / sandboxed caller
+   is refused, and a failure to read the level is fail-closed:
 
-## The privileged edge is gated
+\`\`\`go
+if isMutatingOp(req.Op) {
+    lvl, lerr := peer.IntegrityLevel()
+    if lerr != nil || lvl < platform.IntegrityMedium {
+        return wire.Err("forbidden", "insufficient integrity level for this operation")
+    }
+}
+\`\`\`
 
-The genuinely dangerous primitives — **WFP** network filtering, **ETW**
-telemetry, and a \`TerminateProcess\` kill — only execute on an elevated Windows
-run behind an explicit integration flag. At-rest secrets are sealed with
-**DPAPI** and the data directory is ACL-hardened. Client/service messages ride an
-authenticated **named-pipe** round-trip with an integrity gate on mutating ops.
+3. **Signature before everything.** \`VerifyDirective\` ports a fixed six-step
+   order: device-id binding → \`alg == ed25519\` → resolve the pinned key by keyId →
+   recompute the signed core over canonical params and **verify the signature** →
+   *then* check expiry → then the type/platform allowlist. Expiry is checked after
+   the signature precisely so a forged \`expiresAt\` can never be consulted before
+   the signature is proven:
 
-## Honesty as a feature
+\`\`\`go
+if err := dsig.VerifyB64(key, []byte(core), env.Sig.Value); err != nil {
+    return Verified{}, directiveRejectedf("signature: %v", err)
+}
+// expiry checked AFTER signature so a forged expiry can't help
+if expires < nowUnix { return Verified{}, directiveRejectedf("directive expired") }
+\`\`\`
 
-A capability matrix in the repo states exactly which of the five modules ships
-real enforcement on which of the six platforms — and marks the live privileged
-path as "authored and compiles, proven only on an elevated run." Refusing to
-overstate what a security product does is part of the security posture, not
-marketing copy.`,
+## One enforcer, one guard, at most once
+
+A single shared \`Enforcer\` is the only place a verified directive is driven
+through the kill / quarantine / network-filter ports, and it's shared by the IPC
+path, the check-in loop, and \`confirm_directive\` so dedup can't be bypassed by
+choosing a path. A bounded \`ReplayGuard\` keys the seen-cache on **both** the
+directive id and its nonce, evicting soonest-to-expire entries under a flood, so a
+captured directive can't fire twice. Destructive types (\`kill_process\`,
+\`quarantine_file\`) are held for in-app confirmation; nil ports on a non-elevated
+run yield an honest \`"degraded"\` ack rather than a fake success. A local-first
+canary → correlate → kill/quarantine loop can act on the device's own detections
+with no server round trip.
+
+## Honesty as a security posture
+
+The live system-mutating primitives — WFP filtering, ETW telemetry, and the
+\`TerminateProcess\` kill — are elevation-gated behind an explicit integration flag
+and were **not executed on this build** (the build machine was non-elevated). What
+*was* exercised: the authenticated named-pipe round-trip including an
+integrity-gated mutating op, and the DPAPI seal round-trip. The enforcement logic
+throughout is unit-tested against **fake ports**, so it runs anywhere. Stating that
+split plainly — rather than claiming a kill primitive is "proven" — is part of the
+posture, not a footnote.`,
   },
 
   // ─────────────────── Sentova MTD (security internals → draft) ───────────────────
@@ -408,46 +670,86 @@ marketing copy.`,
     status: 'draft',
     projectSlug: 'sentova-mtd',
     excerpt:
-      'Matching mobile forensic artifacts against STIX spyware indicators is a hot path. Sentova MTD denormalizes it into an index seek.',
+      'Matching mobile forensic artifacts against STIX 2.1 spyware indicators is a hot path, so Sentova MTD lifts each observable into a multikey-indexed array — turning a pattern parse into an index seek.',
     tags: ['go', 'stix', 'mtd', 'forensics', 'mongodb'],
     seo: {
       metaTitle: 'STIX 2.1 IOC matching as an index seek — Sentova MTD',
       metaDescription:
-        'How Sentova MTD stores STIX 2.1 indicators with a denormalized observable array so the artifact-match hot path is an index seek, with tenant isolation and field encryption.',
+        'How Sentova MTD denormalizes STIX 2.1 indicators into a multikey-indexed observable array so the artifact-match hot path is an index seek, with tenant∪platform scoping, s2s identity, and field encryption.',
     },
-    body: `Sentova MTD's flagship "Device Defense" analyses iOS and Android forensic
-artifacts against known spyware indicators. Do that naively and every scan
-becomes a parade of STIX pattern parses. The fix is to move the work from request
-time to write time.
+    body: `Sentova MTD analyses iOS and Android forensic artifacts against known
+mercenary-spyware indicators. Do that naively and every scan becomes a parade of
+STIX pattern parses — a grammar re-interpreted once per observable, per artifact.
+The whole design moves that work from request time to write time.
 
-## Denormalize the observable
+## A STIX pattern is a grammar; a match should be a key lookup
 
-STIX 2.1 \`indicator\` objects carry patterns like
-\`[domain-name:value = 'x.badness.com']\`. Parsing that at match time is the slow
-path. Instead, \`sentova-mtd\` stores each indicator with a **denormalized,
-indexed observable array** — the extracted match keys — so checking an artifact
-is an **index seek**, not a pattern parse. The raw STIX pattern is still kept for
-provenance and audit; it just isn't the thing you query.
+STIX 2.1 \`indicator\` objects carry patterns like \`[domain-name:value = '…']\`.
+Parsing the pattern at match time is O(N) in the feed. Instead, \`sentova-mtd\`
+lifts every concrete comparison out of the pattern **once at ingest** into a
+denormalized \`observables\` array of \`{kind, value}\` pairs, normalized on the way
+in. The raw pattern is retained for provenance, but it is not what you query. The
+hot path is a multikey index over that array:
 
-Indicators carry a malware-family label (the Pegasus / Predator / Reign class)
-and the platform-wide \`low|medium|high|critical\` severity vocabulary, with
-mercenary-spyware IOCs defaulting to \`critical\` so they sort to the top
-everywhere.
+\`\`\`go
+// value leads (high-cardinality selector); kind narrows collisions.
+{Keys: bson.D{{Key: "observables.value", Value: 1}, {Key: "observables.kind", Value: 1}}},
+\`\`\`
 
-## Isolation is not optional
+## Two-phase match, and why the obvious query is wrong
 
-Because this is Mobile Threat Defense for high-risk users, the data model treats
-tenant isolation as a construction rule, not a filter you remember to add:
+Matching is a batched DB pre-filter followed by an in-memory confirm. One query
+does \`{observables: {$elemMatch: {value: {$in: values}}}}\` — the \`$elemMatch\`
+keeps the \`value\` match bound to a single array element while the \`$in\` rides the
+multikey index; \`kind\` is not constrained in the DB query. Then, in memory, the
+analyzer keeps only indicators at the feed's **active snapshot version** and
+confirms an exact per-element \`(value, kind)\` hit. The
+naive \`{"observables.value": v, "observables.kind": k}\` form is deliberately
+avoided because on a multikey index it can match \`v\` in one array element and \`k\`
+in a *different* one — a silent false positive. Normalization has to be
+byte-identical on both the indicator and artifact sides, or matches quietly miss.
+The guarantee is structural rather than a runtime check: because \`observables\` is
+a multikey index, the pre-filter plans as an \`IXSCAN\` instead of the \`COLLSCAN\`
+that a per-request STIX-pattern parse would force — the index does the seek.
 
-- every account-facing document carries an \`accountId\`, and **every** query
-  filters on it, on top of the gateway/PDP authorization;
-- identity arrives as an explicit argument from the service-to-service context —
-  never from a request body;
-- sensitive artifacts are **field-encrypted** (AES-256-GCM), and encrypted fields
-  are **never** indexed.
+## Snapshots that flip atomically
 
-The result is a match path that's fast enough to run on every scan and a storage
-model where a query simply *cannot* reach across tenants by accident.`,
+Feeds carry a monotonic \`snapshotVersion\`. An ingest writes at \`active + 1\` and
+bumps the pointer in one update, so a half-written feed is never matched and a
+rollback is a version decrement. Verdict derivation is pure and deterministic:
+zero matches on a healthy parse is \`CLEAN\`, zero matches on a *degraded* parse is
+\`INCONCLUSIVE\` (a real state, never silently downgraded to clean), and any match
+is \`COMPROMISED\` with severity taken from the strongest matched indicator.
+Mercenary-spyware families default to \`critical\` so they sort to the top.
+
+## Isolation and erasure as construction rules
+
+Because the subjects may be under state-level threat, the storage model is built
+for it:
+
+- Every document carries an \`accountId\`, and match scope is the union of the
+  caller's account and the shared \`platform\` account — never another tenant's
+  data. Identity comes from the verified service-to-service context, **never** a
+  request body:
+
+\`\`\`go
+account = s2s.Account(r.Context())
+principal = s2s.Principal(r.Context())
+if account == "" || principal == "" {
+    return "", "", apperr.Unauthenticated("not authenticated")
+}
+\`\`\`
+
+- The fields that reveal a person or device are AES-256-GCM field-encrypted, and
+  **encrypted fields are never indexed**; the list endpoint projects them out
+  entirely so a poll decrypts nothing.
+- Retention is first-class: per-document \`expiresAt\` TTL indexes plus scoped
+  erasure, so a subject's data ages out or is deleted with no external cleanup
+  path to miss.
+
+Family *names* (Pegasus, Predator, Reign) and the shared severity vocabulary are
+safe to talk about; the concrete indicator values behind them are not, and never
+appear outside the encrypted store.`,
   },
 
   // ─────────────────── Managerenta — neutral → published ───────────────────
@@ -458,85 +760,149 @@ model where a query simply *cannot* reach across tenants by accident.`,
     publishedAt: '2026-07-14T09:00:00.000Z',
     projectSlug: 'managerenta',
     excerpt:
-      'Managerenta is a rental-management app, but its more useful output is a Next.js + Mongo + Redis template the other apps are built from.',
+      'Managerenta is a rental-management app, but its more useful output is a Next.js + Mongo + Redis Model→Service→Route template — with an IAM engine and a receipts-first security review — that the other apps are built from.',
     tags: ['nextjs', 'architecture', 'mongodb', 'redis', 'patterns'],
     seo: {
       metaTitle: 'The reference architecture I clone across every commerce app',
       metaDescription:
-        'How Managerenta became the Model → Service → Route reference architecture that Golden Bite, Chekka, Mogadget and others are cloned from.',
+        'How Managerenta became the Model → Service → Route reference: schema-hook invariants, a CSRF-before-ratelimit wrapper, an AWS-IAM-style engine with a hard tenant floor, and a three-pass security review.',
     },
     body: `Managerenta is a property/rental management app. It is also, quietly, the most
 reused thing I've built — because its layering became the template every other
 commerce app inherits.
 
-## The triad
+## The Model → Service → Route triad
 
-The pattern is a **Model → Service → Route** triad:
+All server code lives under \`src/server/\` and imports \`"server-only"\`, so the
+DB, S3, and secrets can't leak into the client bundle. Three layers, each with one
+job:
 
-- **Models** are the data layer only — schema and persistence, no business logic
-  and no HTTP.
-- **Services** hold the business logic and access control.
-- **Route handlers** stay thin: parse, call a service, serialize.
+- **Models** own persistence. A Mongoose schema plus flat \`xxxDB()\` functions,
+  each wrapped in a Prometheus timer and returning \`null\`/empty on a read error
+  rather than throwing. Cross-cutting rules live in schema hooks: a
+  \`pre("aggregate")\` injects \`{ $match: { deleted: false } }\` and normalizes
+  \`_id\` to a string; a \`post("aggregate")\` swaps stored S3 keys for signed URLs.
+  Ownership is a query-level invariant — updates and deletes filter
+  \`{ _id, userId, deleted: false }\`, and "delete" is a soft-delete flag.
+- **Services** hold business logic and caching. One function per file; they
+  compute Redis query keys, return a cache hit or run the DB work and set a TTL,
+  and never touch \`req\`/\`Response\`.
+- **Route handlers** stay thin: authorize → \`safeParse\` with Zod → call a service
+  → shape the response envelope.
 
-It sounds obvious written down. The value is in holding the line: models never
-reach for a request, routes never reach for the database, and business rules have
-exactly one home.
+## The wrapper enforces order
 
-## Why "reference" is the real feature
+\`withApiHandler\` composes the cross-cutting concerns in a deliberate order, and
+the ordering is load-bearing: the CSRF Origin/Referer check runs **before** the
+rate limiter, so a failed check burns no quota.
 
-Once this was solid — deployed with Docker and AWS Amplify/CodeBuild, tested with
-Playwright, and reviewed in a \`SECURITY_REVIEW.md\` rather than by vibes — it
-became cheaper to start the next app by cloning the pattern than by improvising.
-Golden Bite, Chekka, and Mogadget all carry this shape. A lesson learned in any
-one of them flows back to the reference, so the whole family improves together.
+\`\`\`ts
+if (options.csrf !== false) {
+  const reason = csrfReject(req);
+  if (reason) { const res = fail(403, reason); observe(req, res.status, options.route, startNs); return res; }
+}
+if (rl) { rlResult = await enforceRateLimit(req, rl);
+  if (!rlResult.allowed) return applyRateLimitHeaders(fail(429, "Too many requests"), rlResult); }
+\`\`\`
 
-## The payoff
+## Access control that survives a bad policy
 
-Getting the skeleton right once and reusing it is boring in the best way: new
-products spend their novelty budget on the actual problem, not on re-litigating
-how a request becomes a database write.`,
+Authorization is a real AWS-IAM-style policy engine, not inline role checks.
+\`withAuth\` resolves an \`effectiveOwnerId\` — the user's own id in personal scope,
+or the org owner's id when they've switched into an organization — so org members
+transparently operate on the owner's resources through a single evaluation path.
+And the engine has a hard tenant-isolation floor that beats policy content
+entirely:
+
+\`\`\`ts
+if (target.plane === "org" && target.orgId !== resourceScope(auth)) {
+  return { decision: "deny", reason: "implicit deny (cross-scope org resource)" };
+}
+\`\`\`
+
+Even a wildcard policy can't cross tenants, because the boundary is checked before
+the policy is.
+
+## Receipts, not vibes
+
+The reason it's a *reference* is that it's proven: 93 Vitest files against
+throwaway scratch DBs dropped on teardown, 16 Playwright specs, and a three-pass
+\`SECURITY_REVIEW.md\` with roughly forty findings. The standout is S1 — "2FA was
+never enforced on login; the toggle was decorative" — found by audit and fixed
+with a two-step ticket flow. Getting the skeleton right once and cloning it means
+each new product spends its novelty budget on the actual problem, not on
+re-litigating how a request becomes a database write.`,
   },
 
   // ─────────────────── Chekka — neutral → published ───────────────────
   {
-    title: 'Building to a 37k-word spec instead of a vibe',
+    title: 'Building to a written spec instead of a vibe',
     slug: 'chekka-spec-driven-build',
     status: 'published',
     publishedAt: '2026-07-12T09:00:00.000Z',
     projectSlug: 'chekka',
     excerpt:
-      'Chekka sells trust in a used-car purchase. Writing the spec first is how the build stayed honest about what "verified" means.',
+      "Chekka sells trust in a used-car purchase, so \"verified\" was pinned down in a real written spec — one that ships the code skeleton — before the first route existed.",
     tags: ['nextjs', 'spec-driven', 'mongodb', 'product'],
     seo: {
-      metaTitle: 'Building Chekka to a 37k-word spec instead of a vibe',
+      metaTitle: 'Building Chekka to a written spec instead of a vibe',
       metaDescription:
-        'How Chekka — a professional car inspection and verification product — was built as a Next.js 16 monolith against a large written specification.',
+        'How Chekka — a professional car-inspection product — was built as a Next.js 16 monolith against a dense ~4,700-word specification that ships its own route-handler and Mongoose conventions.',
     },
-    body: `Chekka's whole pitch — "Before you buy, Chekka" — is that an independent
+    body: `Chekka's whole pitch — "before you buy, Chekka" — is that an independent
 professional inspects a used car so the buyer doesn't have to gamble. When the
 product *is* trust, you can't improvise the definition of "verified" halfway
-through the build.
+through the build. So Chekka started from a written specification.
 
-## Spec first
+## A real spec, honestly sized
 
-So Chekka started as a specification — a large one, around 37k words — that
-pins down the inspection flow, the report, and the booking lifecycle before the
-first route exists. The build follows the written contract rather than
+The spec (\`Chekka_Core_Features.md\`) is about **4,700 words across 596 lines** —
+twelve numbered core features plus a "Tech Stack & Code Conventions" section. It
+isn't enormous; it's *dense and structured*, and its most useful trick is that it
+ships the **code skeleton** the build then follows verbatim: the route-handler
+shape and the Mongoose model conventions are written into the spec, so "spec" and
+"scaffold" are the same document. The build follows a contract instead of
 rediscovering scope in code review.
 
-## The stack is deliberately ordinary
+## Descended from the reference architecture
 
-It's a Next.js 16 monolith over Mongoose + Redis + S3, in TypeScript, tested with
-Playwright — a direct descendant of the Managerenta reference architecture. The
-boring stack is the point: nothing about the infrastructure should be surprising,
-because all the surprise budget belongs to the domain.
+Chekka is explicitly "built on the same conventions as \`managerenta-client\`" —
+its README says so on line 5. The same server-only \`src/server/\` triad, the same
+\`withApiHandler(withAuth(...))\` route skeleton, the same \`pre\`/\`post("aggregate")\`
+hooks, \`databaseResponseTimeHistogram\` timers, soft-delete, and model
+memoization. The infrastructure is deliberately unsurprising so the surprise
+budget can all go to the domain.
 
-## Where the weight actually sits
+## The domain is a lifecycle
 
-Three things carry the product: **report integrity** (the artifact a buyer pays
-to trust), **media handling** on S3 (the evidence behind the report), and a
-**booking flow** that schedules real humans to show up and inspect a real car.
-Everything else is plumbing in service of those three.`,
+The core entity is \`inspections\`, and its \`status\` field is a state machine:
+\`submitted → assigned → (declined) → scheduled → in_progress → report_processing →
+completed\`. Assigning an inspector at creation stamps \`assignedAt\` and jumps to
+\`assigned\`; pricing is computed server-side from an admin-tunable \`siteConfig\`
+plus a flat urgent surcharge.
+
+## Report integrity is the product
+
+A report a buyer paid to trust must be immutable once filed, and its numbers must
+be the server's, not the client's. On submit, Chekka recomputes the summary counts
+from the checklist item statuses and refuses to touch a locked report:
+
+\`\`\`ts
+if (current.reportLockedAt) throw ErrReportLocked;
+const all = [...report.exterior, ...report.interior, ...report.mechanical, ...report.roadTest];
+const summary = { ...report.summary,
+  passed:  all.filter(i => i.status === "good").length,
+  minor:   all.filter(i => i.status === "minor").length,
+  serious: all.filter(i => i.status === "serious").length };
+if (lock) { patch.status = "completed"; patch.reportLockedAt = new Date(); }
+\`\`\`
+
+Sharing a finished report is a read-only, self-expiring capability: a \`uuidv4()\`
+nonce maps to the inspection id in Redis with a 7-day TTL, so the link grants
+unauthenticated read access to *one* report and the inspection id never appears in
+the URL. Report integrity, S3-backed evidence, and a booking flow that schedules
+real humans are the three things that carry the product; everything else is
+plumbing in service of them.`,
   },
 
   // ─────────────────── Golden Bite — neutral → published ───────────────────
@@ -547,40 +913,75 @@ Everything else is plumbing in service of those three.`,
     publishedAt: '2026-07-11T09:00:00.000Z',
     projectSlug: 'golden-bite',
     excerpt:
-      'Golden Bite runs a storefront, a back-office, and a staff app on a per-operation database/service model — the same isolation idea, sized for a bakery.',
+      'Golden Bite runs a storefront, an ops dashboard, and a staff app on a per-operation service + IAM discipline — one operation, one authority check, one audit action — sized for a bakery.',
     tags: ['nextjs', 'architecture', 'iam', 'redis', 'observability'],
     seo: {
       metaTitle: 'Per-operation services and IAM for a small business',
       metaDescription:
-        'How Golden Bite applies a per-operation database/service and IAM discipline across a storefront, ops dashboard, and staff mobile app.',
+        'How Golden Bite applies a per-operation service + five-role IAM discipline across a storefront, ops dashboard, and staff app — with an edge that is explicitly "not a security boundary".',
     },
-    body: `Golden Bite is a premium treats and catering business in Abuja, served by three
-surfaces: a customer storefront, an operations dashboard, and a staff mobile app.
-The interesting decision is that a small business runs on an isolation model
-usually reserved for much bigger systems.
+    body: `Golden Bite is a premium treats and catering business in Kubwa, Abuja, served by
+three surfaces in one Next.js 16 app: a customer storefront, an operations
+dashboard, and a staff (kitchen + delivery) app. The interesting decision is that
+a small business runs on an isolation discipline usually reserved for much bigger
+systems — and this app is where the "Golden Bite arch" that later apps clone was
+born.
 
-## Per-operation, not one god-service
+## Per-operation services
 
-Rather than a single backend that can do everything, Golden Bite leans on a
-**per-operation database/service and IAM** discipline (the pattern I nickname the
-"Golden Bite arch"). Each capability gets its own narrow slice of authority, so a
-bug or a compromise in one operation has a small blast radius instead of the run
-of the whole system.
+Rather than a few fat service objects, each operation is its own file. \`orders\`
+alone has \`createOrder.ts\`, \`updateOrderStatus.ts\`, \`checkOrderCapacity.ts\`,
+\`computeOrderTotals.ts\`, \`attachDriver.ts\`, \`setDeliveryProof.ts\`, and more, with
+a barrel re-exporting per namespace. Below them the model layer is likewise
+per-operation \`*DB\` functions, each Prometheus-instrumented. One operation → one
+service call → one authority check → one audit action.
 
-## The supporting cast
+## IAM sized for a bakery
 
-- **Zod** validates at the edges, so bad input dies early.
-- **SWR + axios** handle data fetching on the client.
-- **ioredis** caches the hot reads.
-- **Prometheus** makes each operation independently observable — you can watch a
-  single capability's health instead of guessing from an aggregate.
+Authority is a five-role union — \`customer | kitchen | delivery | manager |
+owner\` — with role groups defined once (\`STAFF_ROLES\`, \`ADMIN_ROLES\`). Two
+enforcement styles coexist: a wrapper that gates by allowed roles, and inline
+sentinel-error checks inside handlers.
+
+\`\`\`ts
+export function withAuth(handler: TAuthedHandler, ...roles: TRole[]) {
+  return async (req: Request) => {
+    const session = await getSessionUser();
+    if (!session) return fail(401, "Not authenticated");
+    if (roles.length && !roles.includes(session.role)) return fail(403, "Forbidden");
+    return handler(req, session);
+  };
+}
+\`\`\`
+
+The edge \`proxy.ts\` does only a cheap cookie-presence redirect and is explicitly
+**"not a security boundary"** — the role is re-checked in every handler, so
+authority is never trusted at the edge. Each write is independently gated and
+audited:
+
+\`\`\`ts
+export const POST = withApiHandler(
+  { route: "/api/admin/menu/products" },
+  auditAdmin(postHandler, { action: "product.create", targetType: "product", captureBody: true }),
+);
+\`\`\`
+
+## The supporting cast, each doing one thing
+
+Zod validates at the edges with \`.strict()\` objects; an ioredis singleton throws
+loudly on a 5-second boot ping rather than silently falling back to memory;
+namespaced Redis cache keys are invalidated on write; two Prometheus histograms
+(\`http_request_duration_seconds\` and \`database_request_duration_seconds\`) make
+every route and every DB call independently observable; and parallel
+\`auditAdmin\`/\`auditUser\` streams fire in a \`finally\` so they survive a throw.
 
 ## Why bother at this size
 
-Because the discipline is free once it's a habit, and it scales *down* as
-gracefully as it scales up. The same instinct — isolate operations, give each the
-least authority it needs, measure them separately — is what shows up, much
-larger, in the platforms. Practising it on a bakery keeps it sharp.`,
+Because the discipline is nearly free once it's a habit, and it scales *down* as
+gracefully as up. The same instinct — isolate operations, give each the least
+authority it needs, measure them separately — is what shows up, much larger, in
+the platforms. Practising it on a bakery keeps it sharp, and Adverta later cloned
+this exact shape.`,
   },
 
   // ─────────────────── Prechop — neutral → published ───────────────────
@@ -591,38 +992,80 @@ larger, in the platforms. Practising it on a bakery keeps it sharp.`,
     publishedAt: '2026-07-09T09:00:00.000Z',
     projectSlug: 'prechop',
     excerpt:
-      'Prechop lets students order campus food before it is cooked. The cutoff time turns an ordinary catalog into a scheduling problem.',
-    tags: ['nextjs', 'prisma', 'paystack', 'marketplace'],
+      'Prechop lets students order campus food before it is cooked, so each listing is a window that opens and closes — enforced two different ways across two backends, one shipped and one not.',
+    tags: ['nextjs', 'mongodb', 'paystack', 'bullmq', 'cron', 'marketplace'],
     seo: {
       metaTitle: 'Inventory that expires: modelling cutoff times in Prechop',
       metaDescription:
-        'How Prechop models dated listings with cutoff times and Paystack prepayment so vendors cook to committed demand.',
+        'How Prechop enforces listing cutoffs — a per-minute cron sweep in the live Next.js/MongoDB app versus a BullMQ delayed job in the separate Fastify/Prisma service — with Paystack prepay and atomic Redis slot reservations.',
     },
     body: `Prechop's tagline is "order before they cook," and that preposition is the entire
 product. A vendor posts a **dated listing** with a **cutoff time**; students
-pre-order and prepay; the kitchen cooks to demand it can actually see.
+pre-order and prepay via Paystack; the kitchen cooks to demand it can actually
+see. The engineering question is deceptively small: *is this listing still
+orderable?*
 
-## A catalog with a clock
+## Two backends, told honestly
 
-Most marketplaces sell from standing inventory. Prechop sells from inventory that
-doesn't exist yet and *expires*. A listing is orderable only until its cutoff,
-after which it locks for the kitchen. That single constraint reframes the whole
-thing: it isn't a store, it's a scheduling problem where each listing is a window
-that opens and closes.
+The repo carries two implementations of the same domain, and it's worth being
+clear about which ships. The **live app** is a single Next.js 16 App-Router
+application persisting to **MongoDB via Mongoose 9**, with Redis for locks, OTP,
+rate-limiting, and cron coordination — no queue. A **separate, earlier service**
+(\`prechop-api\`) is Fastify 5 + **Prisma 7 / PostgreSQL** with a BullMQ worker. The
+Prisma schema is the cleanest expression of the data model, so it's worth reading
+— but it is *not* the live store. I'll draw the model from \`prechop-api\` and the
+shipped scheduling from the Next.js app.
 
-## Prepayment is the commitment device
+## Three time-states
 
-Cutoffs only mean something if the demand behind them is real. Paystack
-prepayment is what makes a pre-order binding — a vendor can commit to cooking a
-known quantity because the orders are already paid, not just intended. The money
-turns "maybe" into a number the kitchen can trust.
+A listing is a window. It is **not-yet-open** while \`scheduledDate\` /
+\`availableFrom\` is in the future, **orderable** between open and \`cutoffTime\`
+while \`ACTIVE\`, and **closed** once the cutoff passes. The read-time guard on every
+order attempt is the same in both backends — reject a too-early order, throw a
+cutoff-passed error past the deadline — so no scheduler race can let a late order
+slip through.
 
-## The build
+## Two ways to close a listing at its cutoff
 
-A Next.js / TypeScript frontend (tested with Vitest + Playwright) over a Node/
-TypeScript API on Prisma. The relational model earns its place here: listings,
-their cutoffs, and paid orders have clear, enforced relationships, and "is this
-still orderable?" is a query, not a guess.`,
+This is the interesting divergence:
+
+- **\`prechop-api\` — a BullMQ delayed job keyed by listing id.** On publish it
+  removes any existing job and enqueues one that fires exactly at the cutoff; the
+  \`jobId = dailyOrderId\` makes it self-deduping and idempotent.
+
+\`\`\`ts
+const existingJob = await cutoffEnforceQueue.getJob(dailyOrderId);
+if (existingJob) await existingJob.remove();
+const delay = Math.max(0, cutoffTime.getTime() - Date.now());
+await cutoffEnforceQueue.add("close-daily-order", { dailyOrderId },
+  { jobId: dailyOrderId, delay, removeOnComplete: true, removeOnFail: true });
+\`\`\`
+
+- **The live app — a per-minute cron sweep with a Redis single-instance lock.**
+  Every job is wrapped in a helper that takes a \`cron:lock:<db>:<job>\` so only one
+  instance per tick does the work under horizontal scaling. Simpler, no queue
+  infra, and several jobs are pinned to the Lagos timezone because a UTC host would
+  fire an hour off.
+
+## Cutoff isn't just "stop new orders"
+
+When the window closes, orders the vendor took money for but never confirmed are
+**auto-cancelled and refunded** through Paystack — closing the listing and
+sweeping stale paid orders are two different jobs. The 30-minute pre-cutoff
+*warning* needs idempotency, because a per-minute sweep would otherwise send
+thirty SMS; it's solved with a per-listing \`SET NX\` whose TTL outlives the window,
+so the expiry *is* the reset.
+
+## Money and slots are server-authoritative
+
+Pricing, item resolution, and add-on ownership are all computed server-side — the
+client sends only ids. Paystack runs on split subaccounts (the platform absorbs
+the processing fee), and the webhook verifies an **HMAC-SHA512** signature on the
+raw body with a timing-safe compare *before* doing anything, then checks
+idempotency and that the paid amount matches the record. Finite \`maxQuantity\`
+slots are guarded separately with atomic Redis reservations (\`INCRBY\` + \`EXPIRE\`,
+availability = capacity − committed − reserved) so concurrent buyers can't oversell
+the last portion.`,
   },
 
   // ─────────────────── Adverta — neutral → published ───────────────────
@@ -633,42 +1076,78 @@ still orderable?" is a query, not a guess.`,
     publishedAt: '2026-07-07T09:00:00.000Z',
     projectSlug: 'adverta',
     excerpt:
-      'Adverta ships a web app and a native app against a single HTTP API in one Turborepo. Here is why the shared contract is the whole point.',
-    tags: ['turborepo', 'nextjs', 'react-native', 'monorepo', 'marketplace'],
+      'Adverta ships a Next.js web app and an Expo mobile app against one Hono/Mongoose API in a Turborepo — and a single shared Zod contract makes an API change break both clients in the same commit.',
+    tags: ['turborepo', 'hono', 'nextjs', 'react-native', 'monorepo', 'marketplace'],
     seo: {
       metaTitle: 'One shared API behind web and native — Adverta',
       metaDescription:
-        'How Adverta uses a Turborepo monorepo to serve a Next.js web app and a React Native app from one shared HTTP API, with per-operation IAM.',
+        'How Adverta serves a Next.js web app and an Expo mobile app from one Hono/Mongoose API in a Turborepo, sharing a Zod contract and a typed client, with explicit-Deny IAM re-resolved per request and atomic budget draws.',
     },
-    body: `Adverta is a Nigeria-focused advertising and marketplace product: free listings,
-paid boosts, in-app chat, a campaign builder, and an agency white-label mode.
-Two clients, web and native, front all of that — and they speak to exactly one
-backend.
+    body: `Adverta is a Nigeria-focused advertising and marketplace product — free listings,
+paid boosts, in-app chat, a campaign builder, and an agency white-label mode —
+fronted by two clients, a Next.js web app and an Expo/React-Native mobile app,
+speaking to exactly one backend. It's a Turborepo, and the shared contract is the
+whole point.
 
-## The monorepo is the contract
+## One contract, consumed as TypeScript
 
-Adverta is a **Turborepo** with a web app, a native mobile app, and a **shared
-HTTP API**. Keeping all three in one repo makes the API contract a first-class,
-enforced boundary rather than a document that drifts. When the API changes, both
-clients change against it in the same commit; there is no "the mobile app is two
-versions behind the endpoint" class of bug.
+The backend is a **Hono** API over **Mongoose 8 / MongoDB** (not Fastify/Prisma),
+and neither client imports its internals. Both talk to it over HTTP through two
+shared packages: \`@adverta/contracts\` (per-domain Zod schemas, the route table,
+and the IAM catalog — a zod-only leaf) and \`@adverta/api-client\` (one typed
+\`ApiClient\` serving web-cookie, SSR-forwarded-cookie, and mobile-bearer callers).
+The packages are consumed as **raw TypeScript via \`exports\` maps — no build step**
+— so a contract change breaks the *compile* of both apps in the same commit. There
+is no "the mobile app is two versions behind the endpoint" class of bug, because
+the endpoint's request schema and the client's input type are the same Zod object.
 
-## Where the product gets interesting
+The mobile client's 401 auto-refresh is de-duped via a single \`refreshInFlight\`
+promise, so the single-use rotating refresh token is spent exactly once even under
+a burst of concurrent 401s.
 
-The monetization surface is what separates this from a classifieds clone:
+## Money that can't be double-spent
 
-- **Boosts and campaigns** need a billing-aware model — a listing's visibility is
-  a paid, time-bound thing.
-- **Agency white-label** needs a genuine multi-tenant story, because agencies
-  resell the platform under their own brand.
+Boosts are a billing-aware model: a campaign has a budget, a spend, and metrics,
+and visibility is a paid, time-bound thing. The load-bearing detail is that a
+budget draw is a single atomic act — the ceiling lives in the query *filter*, so
+check-and-book can't race into an overspend:
 
-## Keeping it isolated
+\`\`\`ts
+const result = await Campaign.findOneAndUpdate(
+  { _id: id, $expr: { $lte: [{ $add: ["$spentNaira", amountNaira] }, "$totalBudgetNaira"] } },
+  { $inc: { spentNaira: amountNaira, leads: 1 } },
+  { returnDocument: "after" },
+).lean<ICampaign>();
+\`\`\`
 
-Under the hood, a **per-operation database/service and IAM** model (the "Golden
-Bite arch") keeps capabilities separated, Redis backs the fast paths, and
-Prometheus supplies metrics. The shared-API discipline up top and the
-per-operation isolation down below are the same instinct pointed in two
-directions: one contract for clients, many small authorities for operations.`,
+Attribution is derived server-side and ignores any client-sent \`campaignId\`;
+billing fires only on the trusted conversation-start path, keyed on a billing
+actor id to defeat Sybil drain; and totals are always recomputed, never trusted
+from the client.
+
+## IAM with no roles, and Deny that wins
+
+Authorization is AWS-flavoured with **no role layer**: a flat \`resource:action\`
+permission catalog, policies of Allow/Deny statements where an explicit **Deny
+always wins**, and groups that bundle policies.
+
+\`\`\`ts
+for (const statement of statements) {
+  const target = statement.effect === "Deny" ? deny : allow;
+  for (const perm of expandActions(statement.actions)) target.add(perm);
+}
+for (const perm of Array.from(deny)) allow.delete(perm);
+\`\`\`
+
+A user's effective set is **re-resolved from the DB on every request**
+(Redis-cached for 30 seconds; an inactive account resolves to the empty set = deny
+all), so a revocation bites within seconds. Agency white-label rides on top: an
+agency id is taken from the **session, never the request**, so holding
+\`clients:write\` is not enough to act on *another* agency's clients.
+
+One honest caveat carried into the writing: "per-operation database/service"
+describes code structure plus application-level IAM — one \`*DB\` fn and one service
+file per operation — not distinct database credentials.`,
   },
 
   // ─────────────────── Mogadget — neutral → published ───────────────────
@@ -679,39 +1158,65 @@ directions: one contract for clients, many small authorities for operations.`,
     publishedAt: '2026-07-06T09:00:00.000Z',
     projectSlug: 'mogadget',
     excerpt:
-      'Mogadget deliberately has no checkout. It hands a shopping intent to WhatsApp, because that is where the retailer actually closes.',
-    tags: ['nextjs', 'mongodb', 'product', 'commerce'],
+      'Mogadget deliberately has no checkout. It hands a shopping intent to WhatsApp with a prefilled deep link, tracks the tap with a fire-before-navigate beacon, and keeps its rules in a pure domain layer.',
+    tags: ['nextjs', 'mongodb', 'product', 'commerce', 'whatsapp'],
     seo: {
       metaTitle: 'A catalog with no cart (on purpose) — Mogadget',
       metaDescription:
-        'Why Mogadget, a single-owner Lagos gadget catalog, ships without a cart or checkout and hands off to WhatsApp/Instagram instead.',
+        'Why Mogadget, a single-owner Lagos gadget catalog, ships without a cart or checkout — a prefilled wa.me deep link, a non-blocking sendBeacon, a TTL click log, and catalog invariants in a pure domain layer.',
     },
     body: `Mogadget is a gadget catalog for a single Lagos retailer, and it ends where most
-e-commerce sites begin: there is no cart and no checkout. A customer browses, then
-orders over **WhatsApp or Instagram**.
+e-commerce sites begin: there is no cart and no checkout. A customer browses,
+filters, and orders over **WhatsApp or Instagram**. The missing feature is the
+feature.
 
-## The missing feature is the feature
+## The hand-off *is* the order flow
 
-It's tempting to read "no cart" as unfinished. It isn't — it's a product
-decision. This retailer already closes sales in chat. Bolting on a checkout would
-add a payment integration, an order-state machine, and a fulfilment flow to
-duplicate a conversation the owner would rather just have. So the site's only job
-is to be a fast, trustworthy catalog that turns an intent into a well-framed
-WhatsApp message.
+This is a documented product decision, not an unfinished one: the store already
+closes sales in chat, so bolting on a checkout would add a payment integration, an
+order-state machine, and a fulfilment flow to duplicate a conversation the owner
+would rather just have. The site's only job is to turn a browsing intent into a
+well-framed message. A pure-function \`domain/whatsapp.ts\` builds the deep link,
+prefilling the exact product and price:
 
-## Less surface, less to break
+\`\`\`ts
+export function buildWhatsAppLink(p) {
+  const base = \`Hi, I'm interested in the \${p.name} (\${formatNaira(p.priceNaira)}) listed on MoGadget\`;
+  const msg = p.url ? \`\${base} — \${p.url}\` : base;
+  return \`https://wa.me/\${WHATSAPP_NUMBER}?text=\${encodeURIComponent(msg)}\`;
+}
+\`\`\`
 
-The stack stays honest to that scope: Next.js + MongoDB + Redis, built on the
-**Model → Service → Route** triad and tested with Vitest + Playwright. With no
-checkout, there's no cart-abandonment edge case, no payment reconciliation, no
-half-finished order to clean up. The complexity you don't ship is complexity you
-never have to operate.
+## Analytics that never interrupt the sale
 
-## The lesson
+The one thing the site *does* record is which channel a visitor tapped, and it
+does so without ever blocking navigation. A client beacon fires **before** the
+browser leaves — \`navigator.sendBeacon\` with a keepalive \`fetch\` fallback, wrapped
+in try/catch — and the server atomically \`$inc\`s a per-product counter, then
+appends to a \`clickEvents\` log best-effort. That log is a **TTL-expiring,
+PII-free** time-series: a MongoDB TTL index ages rows out after 180 days with no
+cron, and nothing personal is stored. Analytics are best-effort; the sale is not.
 
-Matching software to how a business *actually* sells often means building less.
-Mogadget is the small, clean proof of that: the right amount of app for the job,
-and not one endpoint more.`,
+## The model carries the rules
+
+Catalog invariants live in a pure, unit-tested \`domain/\` layer rather than
+scattered through handlers: a \`NEW\` product must have no cosmetic grade and be
+restockable, a used one must carry a grade and be a unique unit, and a restockable
+listing auto-hides when quantity hits zero (but restocking never auto-unhides —
+re-listing is a deliberate admin action). The product list itself sinks
+sold/out-of-stock items below available ones, and search rides a Mongo text index
+alongside a compound filter index.
+
+## Honest tension
+
+The product doc argued for "one admin login, no roles," but the shipped app
+actually carries a full IAM stack — users, groups, policies, WebAuthn passkeys,
+and TOTP 2FA — and the doc's own "historical note" flags the pivot. It's a
+descendant of the managerenta reference architecture (same \`src/server\` triad and
+\`withApiHandler\`, with its own \`withPermission\` RBAC wrapper) plus a \`domain/\` layer and a client \`src/lib/\` API
+layer, with 39 colocated Vitest specs. Matching software to how a business
+*actually* sells often means building less — and being honest about where you
+built more.`,
   },
 
   // ─────────────────── Aisolver — neutral → published ───────────────────
@@ -722,45 +1227,68 @@ and not one endpoint more.`,
     publishedAt: '2026-07-13T09:00:00.000Z',
     projectSlug: 'aisolver',
     excerpt:
-      'Aisolver keeps its layers honest with an arch-check script that turns "please respect the boundaries" into an automated gate.',
+      'AISolver is a larger AI-agent workspace than a to-do app, and it keeps its layers honest with a zero-dependency arch-check that fails the build on any boundary crossing or import cycle.',
     tags: ['typescript', 'fastify', 'monorepo', 'architecture', 'postgres'],
     seo: {
       metaTitle: 'An architecture lint that fails the build — Aisolver',
       metaDescription:
-        'How Aisolver (taskwise-v2) enforces its module boundaries with an arch-check.ts lint, in a pnpm monorepo of React 19 + Fastify 5 over PostgreSQL 17.',
+        'How AISolver (taskwise-v2) enforces its module boundaries with a zero-dependency arch-check.ts — routes↛routes, lib↛routes, an import-cycle ceiling of 0 via Tarjan SCC, a legacy-path ban, and a raw-fetch allowlist.',
     },
-    body: `Aisolver (package \`taskwise-v2\`) is a rebuilt task/list manager — lists, nested
-tasks, groups, drag-and-drop, a calendar, alarms, a trash bin, admin, and
-invite-code registration. For a "just a to-do app," it carries a surprisingly
-grown-up spine.
+    body: `AISolver (package \`taskwise-v2\`) is easy to undersell as "a rebuilt task
+manager." It's really a collaborative task/project platform with built-in AI
+agents that act on the user's own data — think Todoist plus Notion plus a team of
+assistants that can do the work — and the task-manager surface (lists, nested
+tasks, calendar, alarms, trash) is the substrate the agents operate on. A codebase
+that large needs its layers defended, and it defends them with a script.
 
-## Boundaries you can't argue with
+## A lint that fails the build
 
-The centrepiece is discipline: an \`arch-check.ts\` lint that enforces the
-intended module boundaries and **fails the build** when one is crossed. That's
-the whole trick. "Please don't import the database from the UI layer" is a
-code-review plea that erodes under deadline pressure; a script that turns the
-same rule into a red CI check does not get tired, does not get talked out of it,
-and does not forget.
+The centrepiece is \`tools/arch-check.ts\`: a ~320-line, **zero-dependency**
+(\`node:fs\` + \`node:path\` only) boundary guard, run as \`pnpm arch:check\`, that
+**exits 1** on any violation so CI and pre-push fail. "Please don't import the
+database from the UI layer" is a code-review plea that erodes under deadline; a red
+check does not get tired. It enforces five distinct classes of decay:
 
-## The shape
+- **routes ↛ routes** — a route file may not import another route file, with a
+  documented **Stage-6B exception**: a decomposed god-file may import its own
+  co-located \`routes/modules/<name>/*\`, but cross-module and arbitrary top-level
+  route→route imports stay violations.
+- **lib ↛ routes** — the lower layer may never import the upper one.
+- **An import-cycle ceiling of 0.** It builds the full static import graph over
+  \`apps/api/src\`, runs iterative **Tarjan SCC**, and fails if any file sits in a
+  cycle. Only *static* edges count — dynamic \`import()\` is the sanctioned
+  cycle-breaker — and a comment records the burn-down as cuts landed:
+  \`106 → 43 → 13 → 10 → 0\`.
+- **A legacy-path ban**, so a completed rename can't silently regress.
+- **A raw-fetch allowlist** — any file calling the Anthropic messages endpoint
+  that isn't on a six-entry allowlist is a violation, forcing every non-streaming
+  model call through one resilient wrapper that handles credits, 429s, retries,
+  and telemetry.
 
-It's a pnpm monorepo:
+It also emits **non-gating** visibility reports — a cycles summary, a list of files
+≥1200 lines as split candidates, and a mixed static+dynamic SCC report for runtime
+layering debt the zero-static ceiling can't see. The header is honest that this is
+the *interim* guard until a fuller structure lands, at which point it's swapped for
+dependency-cruiser.
 
-- **web** — React 19 + Vite + TypeScript + Tailwind v4,
-- **api** — Fastify 5 + \`node-pg\` + Zod,
-- **db** — PostgreSQL 17,
-- with WebSockets for live updates.
+## The shape underneath
 
-It ships real operational docs too — an \`ARCHITECTURE.md\` and a \`RUNBOOK.md\` —
-so the boundaries the lint enforces are also *written down* for a human.
+It's a pnpm monorepo: an \`apps/web\` of **React 19 + Vite + Tailwind v4 + TanStack
+Query**, and an \`apps/api\` of **Fastify 5 + \`node-pg\` + Zod over PostgreSQL 17**,
+with no ORM. Live updates were migrated off SSE onto a WebSocket bus,
+\`realtimeBus\`, whose design is worth stealing: a per-user \`Set<WebSocket>\`
+(multi-tab safe), a ring buffer of recent frames for reconnect replay, and a
+monotonic per-user sequence. Each frame carries the process start time, so a client
+reconnecting after a server restart is told the buffer is gone and falls back to a
+refetch — an at-least-once realtime protocol with explicit gap detection via a
+resume handshake.
 
-## Why it matters on a small project
+## Why it matters on any project
 
-Architecture rot doesn't wait for scale; it starts on day two of any codebase
-with layers. Encoding the layering as an executable check is how a small tool
-stays refactorable — the structure defends itself instead of relying on everyone
-remembering the plan.`,
+Architecture rot doesn't wait for scale; it starts on day two of any codebase with
+layers. Encoding the layering as an executable check — one that even carries a
+documented exception for legitimate decomposition — is how the structure defends
+itself instead of relying on everyone remembering the plan.`,
   },
 
   // ─────────────────── Fivestick — neutral → published ───────────────────
@@ -771,32 +1299,55 @@ remembering the plan.`,
     publishedAt: '2026-07-05T09:00:00.000Z',
     projectSlug: 'fivestick',
     excerpt:
-      'Fivestick is a marketing site for an AI automation consultancy. Building it static — not as an app — is the whole design decision.',
+      'Fivestick is a marketing site for an AI automation consultancy. Building it as static content — one client island, no backend, conversions offloaded to WhatsApp — is the whole design decision.',
     tags: ['nextjs', 'tailwind', 'static', 'marketing'],
     seo: {
       metaTitle: 'When a static site is the correct amount of engineering',
       metaDescription:
-        'Why Fivestick, a consultancy landing site, is built as a static Next.js + Tailwind (shadcn) site rather than a heavier app.',
+        'Why Fivestick, a consultancy landing site, ships as static Next.js content with Tailwind v4 CSS-first and hand-written components — and why, precisely, it is not a hard static export.',
     },
-    body: `Fivestick is the landing site for an AI automation consultancy. It is static
-Next.js + TypeScript with Tailwind and shadcn/ui, and that restraint is the
-interesting part.
+    body: `Fivestick is the landing site for an AI automation consultancy, and its primary
+job is to send a visitor to a WhatsApp chat or a free 30-minute audit call.
+Building it as static content — not as an application — is the whole design
+decision.
 
 ## Match the tool to the job
 
 A marketing page has a narrow, honest mandate: load fast, read clearly, convert.
-None of that needs a database, a session, or a server round-trip. Building it
-static keeps it cheap to host, trivial to cache at the edge, and quick to iterate
-— and it sidesteps an entire category of runtime failure by simply not having a
-runtime to fail.
+None of that needs a database, a session, or a server round-trip. Fivestick has
+**no backend at all** — no \`api\` routes, no \`use server\` actions, no external
+\`fetch\` in \`src/\`. It's Next.js with React Server Components rendering the page at
+build, and exactly **one** client island: a dependency-free SVG animation. There's
+no form handler and no lead store because conversion is offloaded to a third party
+(a \`wa.me\` link), which removes an entire category of runtime failure by simply
+not having a runtime to fail.
+
+## Static content, stated precisely
+
+One honest nuance: this is static *content*, not a hard static export. The README
+calls it "statically rendered," and it is — but \`next.config.ts\` carries **no
+\`output: 'export'\`**, so the build is a standard Next.js server bundle that assumes
+a Node runtime (or Vercel), not an exported \`/out\` directory. It's a fair "right
+amount of engineering" story either way; it's just not a file-server-only site, and
+saying so keeps the claim accurate.
+
+## Styling, and the shadcn that wasn't
+
+Styling is **Tailwind v4, CSS-first** — no \`tailwind.config.*\` at all; the theme
+lives in \`globals.css\` behind \`@import "tailwindcss"\` and an \`@theme inline\` block
+of brand tokens. shadcn was *scaffolded* (there's a \`components.json\`), but no
+\`src/components/ui\` directory was ever generated and \`cn\`/Radix are never imported
+— the page uses hand-written Tailwind components. Full SEO and crawler
+discoverability is achieved purely with static Next metadata conventions
+(\`sitemap.ts\`, \`robots.ts\`, OpenGraph/Twitter image routes, a manifest) plus
+\`ProfessionalService\` JSON-LD.
 
 ## Restraint as a skill
 
-It's easy to reach for the same heavy app shell you use everywhere. Choosing
-*not* to — recognising that this problem is a document, not an application — is a
-design decision worth naming. The right amount of engineering is sometimes
-noticeably less than you're capable of, and knowing where that line sits is its
-own kind of experience.`,
+It's easy to reach for the same heavy app shell you use everywhere. Recognising
+that this problem is a document, not an application, is a design decision worth
+naming. The right amount of engineering is sometimes noticeably less than you're
+capable of — and knowing where that line sits is its own kind of experience.`,
   },
 
   // ─────────────────── Labs — neutral → published ───────────────────
@@ -829,11 +1380,11 @@ honest move.
 
 ## Why group them
 
-Three tiny repos as three tiny stars would pad the map and imply more than
-there is. One "Labs" node credits the work without inflating it. It's the
-sharpening stone, not the blade: a modern C++ baseline to keep the language fresh,
-algorithm reps to keep the fundamentals warm, and IaC practice to keep the ops
-muscles from atrophying.
+Three tiny repos as three tiny stars would pad the map and imply more than there
+is. One "Labs" node credits the work without inflating it. It's the sharpening
+stone, not the blade: a modern C++ baseline to keep the language fresh, algorithm
+reps to keep the fundamentals warm, and IaC practice to keep the ops muscles from
+atrophying.
 
 ## The point of a labs corner
 
