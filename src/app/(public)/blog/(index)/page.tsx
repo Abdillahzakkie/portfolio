@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   description: 'Engineering notes across my work — Web3, security, and commerce.',
 };
 
+// Reads published posts from Mongo. Static prerendering at build time has no DB
+// and throws, failing CI. `force-dynamic` defers the read to a per-request
+// render — matches `sitemap.ts`/`rss.xml`.
+export const dynamic = 'force-dynamic';
+
 /** Blog index `/blog`. Published posts only (drafts excluded — #3), newest first.
  *
  *  Lives in the `(index)` route group so its `loading.tsx` Suspense/streaming

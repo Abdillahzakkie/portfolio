@@ -2,6 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getSiteSettings } from '@/server/services';
 
+// Reads SiteSettings from Mongo. At build the DB is absent: the fetch falls back
+// to defaults, so the page would otherwise be prerendered with stale defaults
+// baked in. `force-dynamic` renders per request so live settings always show —
+// matches `sitemap.ts`/`rss.xml`.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'About',
   description:

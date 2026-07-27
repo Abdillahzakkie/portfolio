@@ -2,6 +2,11 @@ import type { ConstellationData } from '@/lib/types';
 import { getConstellation } from '@/lib/services';
 import { ConstellationHome } from '@/components/public/graph/ConstellationHome';
 
+// Reads the constellation from Mongo. Static prerendering at build time has no
+// DB and throws (MongooseServerSelectionError), failing CI. `force-dynamic`
+// defers the read to a per-request render — matches `sitemap.ts`/`rss.xml`.
+export const dynamic = 'force-dynamic';
+
 /**
  * Graph home `/`. Server-fetches the constellation, then hands it to the
  * progressive-enhancement host. The intro rail is static (RSC) for SEO; the
