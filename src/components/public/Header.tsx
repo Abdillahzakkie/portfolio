@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ThemeToggle } from './ThemeToggle';
@@ -26,8 +27,15 @@ export function Header() {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
+
+  // Client-only flag so createPortal (which needs `document`) never runs during
+  // SSR — keeps the server-rendered markup and first client render identical.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
@@ -71,6 +79,125 @@ export function Header() {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [menuOpen]);
+
+  // Lock background scroll while the drawer is open. Restore the exact prior
+  // inline value on close/unmount so we never leak the lock or clobber a value
+  // set elsewhere.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [menuOpen]);
+
+  const overlay = menuOpen ? (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+      className="az-nav-mobile-layer"
+    >
+      <button
+        type="button"
+        aria-label="Close menu"
+        onClick={() => setMenuOpen(false)}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(0,0,0,0.4)',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+      />
+      <div
+        ref={drawerRef}
+        id="mobile-nav"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Site menu"
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: 'min(78vw, 300px)',
+          background: 'var(--bg-elevated)',
+          borderLeft: '1px solid var(--border)',
+          padding: '18px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          boxShadow: 'var(--elev-3)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            marginBottom: 8,
+          }}
+        >
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => {
+              setMenuOpen(false);
+              menuButtonRef.current?.focus();
+            }}
+            style={{
+              width: 44,
+              height: 44,
+              display: 'grid',
+              placeItems: 'center',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-strong)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              cursor: 'pointer',
+            }}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <nav
+          aria-label="Primary"
+          style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+        >
+          {NAV.map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: active ? 'var(--text)' : 'var(--text-muted)',
+                  background: active ? 'var(--surface-2)' : 'transparent',
+                }}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <header
@@ -181,113 +308,10 @@ export function Header() {
         </div>
       </div>
 
-      {/* Mobile slide-over */}
-      {menuOpen && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 40 }}
-          className="az-nav-mobile-layer"
-        >
-          <button
-            type="button"
-            aria-label="Close menu"
-            onClick={() => setMenuOpen(false)}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              background: 'rgba(0,0,0,0.4)',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-          />
-          <div
-            ref={drawerRef}
-            id="mobile-nav"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Site menu"
-            style={{
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              bottom: 0,
-              width: 'min(78vw, 300px)',
-              background: 'var(--bg-elevated)',
-              borderLeft: '1px solid var(--border)',
-              padding: '18px 16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 4,
-              boxShadow: 'var(--elev-3)',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'flex-end',
-                marginBottom: 8,
-              }}
-            >
-              <button
-                type="button"
-                aria-label="Close menu"
-                onClick={() => {
-                  setMenuOpen(false);
-                  menuButtonRef.current?.focus();
-                }}
-                style={{
-                  width: 44,
-                  height: 44,
-                  display: 'grid',
-                  placeItems: 'center',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-strong)',
-                  background: 'var(--surface)',
-                  color: 'var(--text)',
-                  cursor: 'pointer',
-                }}
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  aria-hidden="true"
-                >
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <nav
-              aria-label="Primary"
-              style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
-            >
-              {NAV.map((item) => {
-                const active = isActive(pathname, item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={active ? 'page' : undefined}
-                    style={{
-                      padding: '12px 14px',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: 16,
-                      fontWeight: 600,
-                      color: active ? 'var(--text)' : 'var(--text-muted)',
-                      background: active ? 'var(--surface-2)' : 'transparent',
-                    }}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-        </div>
-      )}
+      {/* Mobile slide-over — portaled to <body> so its position:fixed resolves
+          against the viewport, not the backdrop-filtered <header> (which would
+          otherwise become the containing block for fixed descendants). */}
+      {mounted && menuOpen ? createPortal(overlay, document.body) : null}
 
       <style>{`
         @media (max-width: 767px){
