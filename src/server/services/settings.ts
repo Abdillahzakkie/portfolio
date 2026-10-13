@@ -39,7 +39,7 @@ const DEFAULT_SITE_SETTINGS: ISiteSettings = {
   siteDescription:
     'A body of engineering work as a star map — Web3, Security, Commerce and Tools, with a companion write-up per project.',
   githubUrl: 'https://github.com',
-  contactEmail: 'hello@example.com',
+  contactEmail: 'abdullah@amuzed.org',
   defaultOgImage: '',
   createdAt: new Date(0).toISOString(),
   updatedAt: new Date(0).toISOString(),

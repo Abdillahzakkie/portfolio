@@ -63,7 +63,7 @@ const siteSettingsSchema = new Schema(
     },
     contactEmail: {
       type: String,
-      default: 'hello@example.com',
+      default: 'abdullah@amuzed.org',
       trim: true,
     },
     // Optional OG image asset URL. Empty string means "derive/none"; the
