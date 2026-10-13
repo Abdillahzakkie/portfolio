@@ -5,9 +5,9 @@ import { test, expect, type ConsoleMessage } from '@playwright/test';
  * draft-404) + #5 (responsive). Runs against the production build (see config).
  */
 
-const EXPECTED_PROJECT_COUNT = 18;
+const EXPECTED_PROJECT_COUNT = 21;
 
-// Known seeded slugs (18 published / 7 draft split — stable seed).
+// Known seeded slugs (one companion post per project; client/security posts default to draft).
 const PUBLISHED_POST_SLUG = 'managerenta-reference-architecture';
 const PUBLISHED_POST_PROJECT = 'managerenta';
 const DRAFT_POST_SLUG = 'settleo-single-writer-ledger-tigerbeetle';
@@ -16,7 +16,7 @@ const A_PROJECT_SLUG = 'settleo';
 const A_PROJECT_STACK_TERM = 'TigerBeetle';
 
 test.describe('#8 / #2 — graph home', () => {
-  test('the SSR project list exposes all 18 projects, each linking to /projects/[slug]', async ({
+  test('the SSR project list exposes all 21 projects, each linking to /projects/[slug]', async ({
     page,
   }) => {
     await page.goto('/');
@@ -31,7 +31,7 @@ test.describe('#8 / #2 — graph home', () => {
     expect(new Set(hrefs).size).toBe(EXPECTED_PROJECT_COUNT);
   });
 
-  test('the constellation mounts and renders all 18 nodes at 1440px', async ({ page }) => {
+  test('the constellation mounts and renders all 21 nodes at 1440px', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
     const nodes = page.locator('[data-testid="constellation"] [data-testid^="node-"]');

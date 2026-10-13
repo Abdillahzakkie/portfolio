@@ -94,10 +94,14 @@ export const NODE_POSITIONS: Readonly<Record<string, { x: number; y: number }>> 
     prechop: { x: 408.9, y: 602.8 },
     adverta: { x: 380.1, y: 664.8 },
     mogadget: { x: 250, y: 602.2 },
+    // Appended commerce nodes — hand-placed, non-overlapping against the relaxed set above.
+    humanz: { x: 195, y: 528 },
+    squaddy: { x: 455, y: 648 },
+    'aisolver-crm': { x: 470, y: 548 },
+    maitura: { x: 335, y: 705 },
     // Tools / Labs (bottom-right)
     aisolver: { x: 950, y: 610.3 },
     fivestick: { x: 950, y: 677.3 },
-    labs: { x: 950, y: 542.3 },
   });
 
 /** Fallback position for any slug not in the frozen map (unseeded/new project).
@@ -130,8 +134,11 @@ export const GRAPH_EDGES: readonly EdgeData[] = Object.freeze([
   { from: 'gkoi-platform', to: 'gkoi-contracts', kind: 'kinship' },
   { from: 'settleo', to: 'settleo-escrow', kind: 'kinship' },
   { from: 'sentova', to: 'sentova-mtd', kind: 'kinship' },
+  { from: 'humanz', to: 'squaddy', kind: 'kinship' },
   { from: 'settleo', to: 'gkoi-contracts', kind: 'bridge' },
   { from: 'sentova', to: 'settleo', kind: 'bridge' },
+  // Maitura reuses Settleo's single-writer-ledger + outbox pattern (docs/ARCHITECTURE.md).
+  { from: 'maitura', to: 'settleo', kind: 'bridge' },
 ] satisfies EdgeData[]);
 
 /** Cluster reading order (top-left → top-right → bottom-left → bottom-right). */
